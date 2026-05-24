@@ -1,0 +1,9 @@
+# Code Owners
+# Policy: see .agents/standards/DEPENDENCY_MANAGEMENT.md
+
+# Toolchain and dependencies — lead engineer only (solo project)
+/package.json                                @ahmadulhoq
+/package-lock.json                           @ahmadulhoq
+
+# CODEOWNERS itself
+/.github/CODEOWNERS                          @ahmadulhoq
