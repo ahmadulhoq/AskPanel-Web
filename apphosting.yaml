@@ -2,3 +2,50 @@ runConfig:
   timeoutSeconds: 300
   minInstances: 0
   maxInstances: 10
+
+env:
+  # ── Firebase (public — baked into client bundle) ──────────────────────────
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyCATAGc0Qq0cWGdLAjzZGwWiFhhL5Bq6AU
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: askpanel.firebaseapp.com
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: askpanel
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:970337419408:web:330984f45fa949dbeb5815"
+    availability: [BUILD, RUNTIME]
+
+  # ── Stripe (public key only — baked into client bundle) ───────────────────
+  - variable: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+    value: pk_live_51TRa2nFe6FljAkf5ACQW1qbt0UYU3sAL96dlOZrmc5fTp19jSalbYCrCBZBaqU03YqQ2reoZjgAhoEymBoxpz3bQ00h5V7CNCC
+    availability: [BUILD, RUNTIME]
+
+  # ── App URL ───────────────────────────────────────────────────────────────
+  - variable: NEXT_PUBLIC_APP_URL
+    value: https://askpanel-backend--askpanel.us-east4.hosted.app
+    availability: [BUILD, RUNTIME]
+
+  # ── Stripe price ID (used server-side at build/runtime) ───────────────────
+  - variable: STRIPE_PRO_PRICE_ID
+    value: price_1TabhMFe6FljAkf5JiDs0Lru
+    availability: [BUILD, RUNTIME]
+
+  # ── Secrets (injected from Secret Manager at runtime) ─────────────────────
+  - variable: FIREBASE_ADMIN_CLIENT_EMAIL
+    secret: firebase-admin-client-email
+    availability: [RUNTIME]
+  - variable: FIREBASE_ADMIN_PRIVATE_KEY
+    secret: firebase-admin-private-key
+    availability: [RUNTIME]
+  - variable: ANTHROPIC_API_KEY
+    secret: anthropic-api-key
+    availability: [RUNTIME]
+  - variable: STRIPE_SECRET_KEY
+    secret: stripe-secret-key
+    availability: [RUNTIME]
+  - variable: STRIPE_WEBHOOK_SECRET
+    secret: stripe-webhook-secret
+    availability: [RUNTIME]
