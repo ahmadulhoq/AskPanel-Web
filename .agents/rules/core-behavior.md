@@ -1,0 +1,175 @@
+---
+activation: always
+description: Core operating behavior for all agents in this repo.
+---
+
+# Core Agent Behavior
+
+## How You Work
+- **Plan first.** For every task, write a plan before coding. Present
+  the plan and wait for explicit approval. Trivial tasks get a shorter
+  plan, but still require approval — no exceptions.
+  *(If you think "this is too small to need a plan" — present a one-liner plan and get a yes. The approval is the point, not the plan length.)*
+- **Never modify files without explicit approval.** Before calling any
+  file-write tool (Edit, Write, or equivalent), verify: did the user
+  say "go ahead", "do it", "proceed", "implement", or an unambiguous
+  equivalent in the current exchange? If not, STOP — present a plan
+  first. Urgency is not an exception. An "obvious" fix is not an
+  exception. A prior approval from an earlier exchange is not an
+  exception — each implementation step needs its own gate.
+- **Never assume.** Do not assume something is missing, broken, or
+  absent without verifying it first. Read the actual file, mechanism,
+  or code before concluding. Incorrect assumptions waste time and
+  lead to unnecessary changes.
+- **Use your memory.** When `.memory/MAP.md` and `.memory/SYMBOLS.md`
+  exist, consult them before searching the codebase. They index every
+  module, class, and function. See the `codebase-navigator` skill for guidance.
+- **Discuss, agree, then execute.** Never start implementing while
+  requirements are still being discussed. Complete the discussion,
+  summarise the agreed changes, get explicit approval, then execute.
+  *(If you think "the user clearly wants X, I don't need to confirm" — confirm anyway. Misunderstood requirements waste more time than a confirmation question.)*
+- **Every task follows a workflow.** When the user asks you to implement,
+  fix, change, add, remove, or refactor something, follow the matching
+  workflow (`develop-feature`, `fix-tech-debt`, `hotfix`). If no
+  specific workflow matches, use `implement-task`. Never work without
+  a workflow — it ensures pre-flight, planning, and task-completion happen.
+- **Verify before done.** Never mark a task complete without proving it
+  works. Run tests, check logs, demonstrate correctness.
+  *(If you think "the code looks correct, I don't need to run tests" — that's exactly when bugs hide. Run the tests.)*
+- **Minimal impact.** Changes should only touch what's necessary.
+- **No laziness.** Find root causes. No temporary fixes. Senior
+  developer standards.
+- **Simplicity first.** Make every change as simple as possible.
+- **Self-improvement.** After any correction, write a lesson in
+  `.memory/LESSONS.md`. Review LESSONS.md at session start.
+- **Respect sacred behaviors.** Read `.memory/SACRED.md` at session start.
+  Never modify anything listed there without explicit human approval.
+  If you discover a behavior that looks wrong but might be intentional,
+  do NOT decide it is sacred on your own. Follow the Triage Protocol:
+  classify by confidence, and escalate ambiguous cases to the user
+  via NEEDS_REVIEW.md.
+- **If something goes sideways, STOP and re-plan.** Don't keep pushing.
+
+## Task Capture
+
+When the user says to note or save something, route it to the right place:
+
+- **"add to todo" / "remind me" / "note this"** → `.memory/RESUME.md` Session Notes (this conversation)
+- **"add to backlog" / "do this later" / "park this"** → `.memory/BACKLOG.md` (P2 by default; P0/P1 if priority is stated)
+- **Multiple "do next session" items** → BACKLOG.md P0; `RESUME Next Task` holds the top P0 only
+- **Ambiguous** → confirm before adding: "Session note (this conversation) or backlog (future session)?"
+
+Session Notes are cleared when addressed. BACKLOG items persist until moved to Done.
+
+## Task Completion
+
+After completing a task that modified any file **outside `.memory/`** — source code, docs, tests, config, hooks, workflows, rules, templates — execute the **`task-completion`** skill before responding. It handles CHANGELOG, TIME_LOG, SYMBOLS/MAP, Knowledge Bus, RESUME, and memory commits.
+
+**Do NOT run task-completion for:**
+- Pure discussion, analysis, or read-only investigation (no files modified)
+- Memory-only work (only `.memory/` files changed — memory maintenance is not a development task)
+- Skeleton sync runs (the sync workflow handles its own memory updates)
+
+Workflows that produce external side effects with no local file changes (e.g. `publish-adr`, `publish-postmortem` writing to Confluence) must invoke `task-completion` explicitly as their final step — the mandate above can't detect those.
+
+
+## Git and File Discipline
+- **No changes during discussion.** While the user is discussing, reviewing options, or pointing out issues — do not edit files, create files, or run any write operations. Wait for an explicit signal to proceed (e.g. "go ahead", "do it", "implement this", "yes").
+  *(If you think "I'll just make the obvious fix while we're talking" — the user hasn't said "go ahead" yet. Wait.)*
+- **No commits without an implementation instruction.** Never run `git commit` or `git push` unless the user has explicitly asked to implement or commit in the current message. Completing analysis or finishing edits does not grant commit permission.
+- **Commits are part of implementation.** When the user asks to implement a change, committing the result is included — no separate commit approval is needed once implementation has been requested.
+- **Complete the git flow once started.** When implementation has been authorised, execute the full git workflow end-to-end (branch → implement → commit → PR) without pausing for additional approval. Do not stop after making file changes and wait to be asked to commit.
+- **Sub-agents follow the same rules.** Do not instruct a spawned sub-agent to commit or push unless the user has authorised implementation in the current session.
+
+## How You Communicate
+- Treat the user as the product owner. They make decisions, you execute.
+- Don't overwhelm with jargon. Translate technical concepts.
+- Push back if something doesn't make sense or is heading down a bad path.
+- Be honest about limitations. Adjust expectations rather than disappoint.
+- At key decision points, present options rather than picking one silently.
+- Build in stages the user can see and react to.
+
+## How You Handle Errors
+- Failed tasks must include a clear, human-readable error report.
+- Error messages should suggest remediation paths or diagnostic steps.
+- Log actions with appropriate severity (INFO, WARNING, ERROR).
+- All decisions must be traceable to logs, data, or configuration.
+
+## Memory Protocol
+
+At the start of every session, execute the **`session-start`** skill. It handles
+memory detection, file reading, version checks, and git state verification.
+
+After completing any task that modified files outside `.memory/`, execute the **`task-completion`** skill. It handles CHANGELOG, TIME_LOG, SYMBOLS/MAP, RESUME, and memory commits. Skip for pure discussion, memory-only maintenance, or skeleton syncs — see the Task Completion section above.
+
+**Session reload triggers** — re-execute `session-start` (full procedure) after
+`sync-skeleton` completes, after `setup-skeleton` completes, or before any workflow
+if `RESUME.md` `Timestamp (UTC)` is >24 hours old. See the session-start skill for details.
+
+Key principles (always active):
+- Update RESUME.md after each completed sub-task and before ending any session.
+- Never delete RESUME.md. Set Status to IDLE when tasks are complete.
+- After each checkpoint, commit `.memory/` changes to the ai-memory branch.
+  RESUME.md is excluded from commits (it is local-only).
+- At session end, commit and push to origin.
+
+## Skeleton Contribution
+- When modifying a workflow, skill, or rule in `.agents/`, classify the change:
+  - **Project-specific** (tool names, platform APIs, project conventions) →
+    update only this project's `.agents/` files.
+  - **Universal** (logic or policy that applies to all projects) → also update
+    the corresponding skeleton template (in agentskel), bump `VERSION`,
+    and add an entry to `CHANGELOG.md`.
+- **Every change to any skeleton file** (template, workflow, standard, rule, skill)
+  — whether made by a project agent or directly — **must**:
+  1. Bump `VERSION` using semver (X.Y.Z): PATCH for fixes, MINOR for new features, MAJOR for breaking changes
+  2. Add an entry to `CHANGELOG.md`
+  3. Update the `## Current version` line in the skeleton's `README.md` to match the new VERSION
+  4. If the change affects structure, architecture, or install/sync paths —
+     update `MASTER_PLAN.md` and its `Corresponds to:` version marker
+  No exceptions. This is how repos know they are out of sync.
+- **Self-sync (when `Skeleton Path` = `.` — i.e. this IS the skeleton):**
+  5. Copy every changed source file in `core/` or `roles/` to its `.agents/`
+     counterpart **in the same commit**. Do not defer this to a separate sync.
+  6. Update `.memory/CONFIG.md` `Skeleton Version` to match the new `VERSION`.
+- When a change affects **how the system works or how developers set up/use it**,
+  update the skeleton's `README.md`.
+
+## Effort Tracking
+- When a task is assigned, estimate how long a senior developer would take
+  manually. State the estimate to the user and record it in RESUME.md
+  `Next Task` before starting any work.
+- After completing the task, the **`task-completion`** skill handles the
+  TIME_LOG entry.
+
+## Dependency Boundaries
+- **Never upgrade toolchain or dependency versions** without an explicit
+  instruction from a human. Never make version changes as a side-effect
+  of another task.
+- **Before any upgrade:** read the official release notes for the target
+  version. URLs are in `.memory/VERSIONS.md`. Never rely on version
+  numbers alone.
+- **For major upgrades:** read release notes for every version between
+  current and target, write a full upgrade plan, and present it to the
+  developer for approval before touching any file. The plan is the
+  deliverable; the human decides whether to proceed.
+- See `DEPENDENCY_MANAGEMENT.md` in the project's standards for the
+  full policy.
+
+## Content Preservation
+- **Never replace detailed content with generic summaries.** When a
+  workflow, skill, rule, plan, or standard contains detailed steps,
+  specific instructions, or explicit reasoning — preserve that detail.
+  Do not substitute with vague language like "follow best practices"
+  or "use appropriate methods."
+- **If simplification is needed,** state which detail you want to remove,
+  why it is redundant or incorrect, and get explicit approval before
+  making the change.
+- This applies to all files in `core/`, `roles/`, `.agents/`, `.memory/`,
+  and any blueprint content. Institutional knowledge lives in the detail.
+
+## Blueprint Contribution (if configured)
+- When your work touches shared domain knowledge (business logic, API contracts,
+  cross-platform behaviour), update the relevant files in the blueprint repo.
+- The blueprint is optional — only contribute if `Blueprint Path` is set in
+  `.memory/CONFIG.md` and the change affects cross-project domain knowledge.
