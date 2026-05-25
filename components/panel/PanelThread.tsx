@@ -14,7 +14,6 @@ export function PanelThread({ panelId }: Props) {
   const state = usePanel(panelId)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  // Auto-scroll as content streams in
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [state.turns, state.syntheses, state.finalAnswer])
@@ -23,16 +22,22 @@ export function PanelThread({ panelId }: Props) {
     return <PanelSkeleton />
   }
 
-  // Interleave turns and syntheses in round order
   const roundNumbers = [...new Set([
     ...state.turns.map(t => t.round),
     ...state.syntheses.map(s => s.round),
   ])].sort((a, b) => a - b)
 
   return (
-    <div className="space-y-4">
-      {roundNumbers.map(round => (
-        <div key={round} className="space-y-3">
+    <div className="space-y-8">
+      {roundNumbers.map((round, roundIdx) => (
+        <div key={round} className="space-y-6">
+          {roundIdx > 0 && (
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-xs text-muted-foreground">Round {round}</span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+          )}
           {state.turns
             .filter(t => t.round === round)
             .map((turn, i) => (
@@ -63,9 +68,17 @@ export function PanelThread({ panelId }: Props) {
 
 function PanelSkeleton() {
   return (
-    <div className="space-y-4 animate-pulse">
-      {[1, 2, 3].map(i => (
-        <div key={i} className="h-32 rounded-lg bg-muted" />
+    <div className="space-y-8 animate-pulse">
+      {[{ w: 'w-20' }, { w: 'w-16' }, { w: 'w-24' }].map((item, i) => (
+        <div key={i} className="flex gap-3">
+          <div className="h-7 w-7 flex-shrink-0 rounded-full bg-muted" />
+          <div className="flex-1 space-y-2">
+            <div className={`h-3.5 rounded bg-muted ${item.w}`} />
+            <div className="h-4 rounded bg-muted" />
+            <div className="h-4 rounded bg-muted w-5/6" />
+            <div className="h-4 rounded bg-muted w-3/4" />
+          </div>
+        </div>
       ))}
     </div>
   )

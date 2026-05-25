@@ -33,27 +33,34 @@ export default async function PanelPage({ params }: Props) {
   const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}/p/${panelId}`
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
-      <div className="mb-6 flex items-center justify-between">
-        <Link href="/dashboard">
-          <Button variant="ghost" size="sm">← Dashboard</Button>
-        </Link>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={undefined}
-          data-share-url={shareUrl}
-          id="share-btn"
-        >
-          Share
-        </Button>
-      </div>
+    <div className="flex min-h-screen flex-col">
+      <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
+          <Link href="/dashboard">
+            <Button variant="ghost" size="sm" className="-ml-2 text-muted-foreground hover:text-foreground">
+              ← Dashboard
+            </Button>
+          </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            data-share-url={shareUrl}
+            id="share-btn"
+          >
+            Share
+          </Button>
+        </div>
+      </header>
 
-      <div className="mb-6">
-        <h1 className="text-lg font-semibold">{panel.question}</h1>
-      </div>
+      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
+        <div className="mb-8 flex justify-end">
+          <div className="max-w-[85%] rounded-2xl bg-primary px-4 py-3 text-primary-foreground">
+            <p className="text-sm leading-relaxed">{panel.question}</p>
+          </div>
+        </div>
 
-      <PanelThread panelId={panelId} />
-    </main>
+        <PanelThread panelId={panelId} />
+      </main>
+    </div>
   )
 }
