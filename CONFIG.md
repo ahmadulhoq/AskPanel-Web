@@ -28,7 +28,7 @@ Update to `active` once the cartographer workflow finishes.
 |-------|-------|
 | Default Branch | main |
 | Skeleton Version | 1.57.0 |
-| Skeleton Path | ../agentskel |
+| Skeleton Path | ~/.agentskel/skeleton |
 | Blueprint Path | (optional) path to local blueprint (team knowledge) repo |
 | Last Blueprint Sync | YYYY-MM-DDTHH:MMZ |
 | Last Dependency Check | YYYY-MM-DDTHH:MMZ |
