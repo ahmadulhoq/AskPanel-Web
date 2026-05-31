@@ -6,6 +6,7 @@ import { QuestionComposer } from '@/components/dashboard/QuestionComposer'
 import { SignOutButton } from '@/components/auth/SignOutButton'
 import { Badge } from '@/components/ui/badge'
 import { ConfidenceBadge } from '@/components/panel/ConfidenceBadge'
+import { PERSONA_MAP } from '@/lib/agents/personas'
 import type { PanelDoc, ConfidenceLevel } from '@/types'
 
 export const metadata = { title: 'Dashboard — AskPanel' }
@@ -93,6 +94,11 @@ export default async function DashboardPage({
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
+                    {panel.persona && panel.persona !== 'general' && (
+                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        {PERSONA_MAP[panel.persona]?.label ?? panel.persona}
+                      </span>
+                    )}
                     {panel.status === 'complete' && panel.confidence && (
                       <ConfidenceBadge level={panel.confidence as ConfidenceLevel} />
                     )}

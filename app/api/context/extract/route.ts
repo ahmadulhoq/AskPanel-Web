@@ -4,6 +4,24 @@ import { adminDb } from '@/lib/firebase/admin'
 
 const MAX_CONTEXT_CHARS = 4000
 
+// Prevent SSRF by blocking private/loopback/link-local addresses.
+function isPrivateHost(hostname: string): boolean {
+  const h = hostname.toLowerCase()
+  if (h === 'localhost' || h === '127.0.0.1' || h === '::1') return true
+  if (h === '169.254.169.254') return true // GCP/AWS metadata
+  const ipv4 = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/)
+  if (ipv4) {
+    const [a, b] = [Number(ipv4[1]), Number(ipv4[2])]
+    if (a === 10) return true
+    if (a === 172 && b >= 16 && b <= 31) return true
+    if (a === 192 && b === 168) return true
+    if (a === 169 && b === 254) return true
+    if (a === 127) return true
+    if (a === 0) return true
+  }
+  return false
+}
+
 function stripHtml(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, '')
@@ -48,6 +66,10 @@ export async function POST(request: NextRequest) {
 
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     return NextResponse.json({ error: 'Only http and https URLs are supported' }, { status: 400 })
+  }
+
+  if (isPrivateHost(parsed.hostname)) {
+    return NextResponse.json({ error: 'URL points to a private or reserved address' }, { status: 400 })
   }
 
   try {

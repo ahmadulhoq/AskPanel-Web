@@ -7,10 +7,13 @@
 
 | ID | Priority | Title | Added | Jira Ticket | Notes |
 |----|----------|-------|-------|-------------|-------|
-| BL-001 | P0 | Run cartographer workflow to build codebase memory | 2026-05-24 | | Setup prerequisite |
-| BL-004 | P0 | Rotate exposed Firebase API key & add GCP restrictions | 2026-05-25 | | Key `AIzaSyCATAGc0Qq...` committed in plain text in 9f2f479d; rotate in GCP Console, apply HTTP referrer + API restrictions, move to Secret Manager in apphosting.yaml, dismiss GitHub secret scanning alert |
-| BL-002 | P1 | Deploy to Firebase App Hosting | 2026-05-24 | | Requires GitHub connection via Firebase Console |
-| BL-003 | P1 | Set up Stripe webhook endpoint in production | 2026-05-24 | | After live URL known |
+| BL-004 | P0 | Rotate exposed Firebase API key & add GCP restrictions | 2026-05-25 | | Key `AIzaSyCATAGc0Qq...` committed in plaintext in 9f2f479d; rotate in GCP Console, apply HTTP referrer + API restrictions; update `apphosting.yaml` with the new value |
+| BL-002 | P1 | Deploy to Firebase App Hosting | 2026-05-24 | | Connect GitHub repo in Firebase Console; live URL unlocks BL-003 |
+| BL-003 | P1 | Set up Stripe webhook endpoint in production | 2026-05-24 | | After live URL known; add webhook in Stripe dashboard, set `stripe-webhook-secret` in Secret Manager |
+| BL-020 | P2 | Custom persona builder (Pro) | 2026-05-31 | | User writes their own respondent/critic system prompts; stored per user in Firestore |
+| BL-021 | P2 | File upload for context (Pro) | 2026-05-31 | | PDF + .txt upload alongside existing URL-fetch; parse server-side, same 4000-char cap |
+| BL-022 | P2 | Dashboard panel search & filter | 2026-05-31 | | Filter by persona, status, date range; client-side on the 20-item list is fine |
+| BL-023 | P2 | Usage / billing page for Pro users | 2026-05-31 | | Show run count, subscription renewal date, link to Stripe customer portal |
 
 ---
 
@@ -18,3 +21,8 @@
 
 | ID | Title | Completed |
 |----|-------|-----------|
+| BL-019 | Configurable max rounds 1–3 (Pro gate on round 3) | 2026-05-31 |
+| BL-016 | Panel export as Markdown download | 2026-05-31 |
+| BL-015 | URL + text context injection (Pro only) | 2026-05-31 |
+| BL-014 | Follow-up question composer with parent context | 2026-05-31 |
+| BL-013 | Persona selector — 5 personas, Pro gate on 3 | 2026-05-31 |

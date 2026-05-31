@@ -6,6 +6,7 @@ import { AgentTurn } from './AgentTurn'
 import { SynthesisCard } from './SynthesisCard'
 import { FinalAnswer } from './FinalAnswer'
 import { FollowUpComposer } from './FollowUpComposer'
+import { RetryButton } from './RetryButton'
 
 interface Props {
   panelId: string
@@ -74,8 +75,11 @@ export function PanelThread({ panelId, persona = 'general' }: Props) {
       )}
 
       {state.status === 'error' && (
-        <div className="rounded-lg border border-destructive bg-destructive/10 p-4 text-sm text-destructive">
-          {state.errorMessage ?? 'An error occurred. Please try again.'}
+        <div className="rounded-lg border border-destructive bg-destructive/10 p-4 space-y-3">
+          <p className="text-sm text-destructive">
+            {state.errorMessage ?? 'An error occurred. Please try again.'}
+          </p>
+          <RetryButton panelId={panelId} />
         </div>
       )}
 
