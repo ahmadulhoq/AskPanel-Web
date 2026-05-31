@@ -5,12 +5,14 @@ import { usePanel } from '@/hooks/usePanel'
 import { AgentTurn } from './AgentTurn'
 import { SynthesisCard } from './SynthesisCard'
 import { FinalAnswer } from './FinalAnswer'
+import { FollowUpComposer } from './FollowUpComposer'
 
 interface Props {
   panelId: string
+  persona?: string
 }
 
-export function PanelThread({ panelId }: Props) {
+export function PanelThread({ panelId, persona = 'general' }: Props) {
   const state = usePanel(panelId)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -65,7 +67,10 @@ export function PanelThread({ panelId }: Props) {
       ))}
 
       {state.status === 'complete' && state.finalAnswer && state.confidence && (
-        <FinalAnswer answer={state.finalAnswer} confidence={state.confidence} />
+        <>
+          <FinalAnswer answer={state.finalAnswer} confidence={state.confidence} />
+          <FollowUpComposer parentPanelId={panelId} parentPersona={persona} />
+        </>
       )}
 
       {state.status === 'error' && (

@@ -19,6 +19,7 @@ export interface UserDoc {
   photoURL: string | null
   createdAt: Timestamp
   freeRunsUsed: number
+  freeRunsResetAt: Timestamp | null
   subscription: UserSubscription
 }
 
@@ -45,6 +46,9 @@ export interface PanelDoc {
   userId: string
   question: string
   title: string | null
+  persona: string
+  parentPanelId: string | null
+  context: string | null
   status: PanelStatus
   isPublic: boolean
   createdAt: Timestamp

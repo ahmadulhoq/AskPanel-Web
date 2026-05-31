@@ -14,9 +14,11 @@ interface Props {
   onQuestionChange: (value: string) => void
   isPublic: boolean
   onIsPublicChange: (value: boolean) => void
+  persona?: string
+  parentPanelId?: string
 }
 
-export function PanelInput({ question, onQuestionChange, isPublic, onIsPublicChange }: Props) {
+export function PanelInput({ question, onQuestionChange, isPublic, onIsPublicChange, persona = 'general', parentPanelId }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [showPaywall, setShowPaywall] = useState(false)
@@ -47,7 +49,7 @@ export function PanelInput({ question, onQuestionChange, isPublic, onIsPublicCha
       const res = await fetch('/api/panels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: trimmed, isPublic }),
+        body: JSON.stringify({ question: trimmed, isPublic, persona, parentPanelId }),
       })
 
       if (res.status === 402) {

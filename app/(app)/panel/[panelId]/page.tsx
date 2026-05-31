@@ -50,7 +50,7 @@ export default async function PanelPage({ params }: Props) {
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
         <QuestionBubble question={panel.question} />
-        <PanelThread panelId={panelId} />
+        <PanelThread panelId={panelId} persona={panel.persona ?? 'general'} />
       </main>
     </div>
   )

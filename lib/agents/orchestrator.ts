@@ -106,7 +106,7 @@ async function updateSynthesisField(
 }
 
 export async function* runPanel(input: OrchestratorInput): SSEGenerator {
-  const { panelId, question, config } = input
+  const { panelId, question, config, persona = 'general', context } = input
   const model = config.model ?? DEFAULT_MODEL
   const db = adminDb()
   const panelRef = db.collection('panels').doc(panelId)
@@ -120,7 +120,7 @@ export async function* runPanel(input: OrchestratorInput): SSEGenerator {
   try {
     for (let round = 1; round <= config.maxRounds; round++) {
       // ── Respondent ──────────────────────────────────────────────────
-      const respondentPrompt = buildRespondentPrompt(question, history)
+      const respondentPrompt = buildRespondentPrompt(question, history, persona, round === 1 ? context : undefined)
       yield { type: 'agent_start', agent: 'respondent', round } satisfies SSEEvent
 
       let respondentContent = ''
@@ -136,7 +136,7 @@ export async function* runPanel(input: OrchestratorInput): SSEGenerator {
       await updateRoundField(panelId, round, 'respondent', respondentContent)
 
       // ── Critic ──────────────────────────────────────────────────────
-      const criticPrompt = buildCriticPrompt(question, history)
+      const criticPrompt = buildCriticPrompt(question, history, persona)
       yield { type: 'agent_start', agent: 'critic', round } satisfies SSEEvent
 
       let criticContent = ''

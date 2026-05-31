@@ -91,6 +91,8 @@ export async function GET(
     panelId,
     question: panelData.question,
     config: panelData.config,
+    persona: panelData.persona ?? 'general',
+    context: panelData.context ?? undefined,
   })
 
   const readable = new ReadableStream({

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Lock } from 'lucide-react'
+import { Lock, CornerDownRight } from 'lucide-react'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
 import { QuestionComposer } from '@/components/dashboard/QuestionComposer'
@@ -9,6 +9,12 @@ import { ConfidenceBadge } from '@/components/panel/ConfidenceBadge'
 import type { PanelDoc, ConfidenceLevel } from '@/types'
 
 export const metadata = { title: 'Dashboard — AskPanel' }
+
+function formatResetDate(timestamp: { toMillis(): number } | null | undefined): string | null {
+  if (!timestamp) return null
+  const d = new Date(timestamp.toMillis())
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
 
 export default async function DashboardPage({
   searchParams,
@@ -22,8 +28,10 @@ export default async function DashboardPage({
   const db = adminDb()
   const userSnap = await db.collection('users').doc(user.uid).get()
   const userData = userSnap.data()
-  const tier = userData?.subscription?.tier ?? 'free'
+  const tier = (userData?.subscription?.tier ?? 'free') as 'free' | 'pro'
   const freeRunsUsed = userData?.freeRunsUsed ?? 0
+  const resetDate = formatResetDate(userData?.freeRunsResetAt)
+  const runsLeft = Math.max(0, 5 - freeRunsUsed)
 
   const panelsSnap = await db
     .collection('panels')
@@ -40,7 +48,10 @@ export default async function DashboardPage({
         <h1 className="text-xl font-bold">AskPanel</h1>
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
           {tier === 'free' ? (
-            <span>{5 - freeRunsUsed} free run{5 - freeRunsUsed !== 1 ? 's' : ''} remaining</span>
+            <span>
+              {runsLeft} free run{runsLeft !== 1 ? 's' : ''} left
+              {resetDate && <span className="ml-1 text-xs opacity-70">· resets {resetDate}</span>}
+            </span>
           ) : (
             <Badge variant="default">Pro</Badge>
           )}
@@ -50,12 +61,12 @@ export default async function DashboardPage({
 
       {upgraded === '1' && (
         <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-950/30 dark:text-green-300">
-          You're now on Pro. Enjoy unlimited panel runs.
+          You&apos;re now on Pro. Enjoy unlimited panel runs.
         </div>
       )}
 
       <section className="mb-10">
-        <QuestionComposer />
+        <QuestionComposer tier={tier} />
       </section>
 
       {panels.length > 0 && (
@@ -71,7 +82,10 @@ export default async function DashboardPage({
                   className="flex items-start justify-between rounded-lg border p-3 hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex min-w-0 flex-1 items-start gap-2 mr-4">
-                    {!panel.isPublic && (
+                    {panel.parentPanelId && (
+                      <CornerDownRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Follow-up" />
+                    )}
+                    {!panel.isPublic && !panel.parentPanelId && (
                       <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Private" />
                     )}
                     <p className="text-sm line-clamp-2">
