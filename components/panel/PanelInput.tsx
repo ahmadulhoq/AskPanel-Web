@@ -16,9 +16,11 @@ interface Props {
   onIsPublicChange: (value: boolean) => void
   persona?: string
   parentPanelId?: string
+  userContext?: string
+  maxRounds?: number
 }
 
-export function PanelInput({ question, onQuestionChange, isPublic, onIsPublicChange, persona = 'general', parentPanelId }: Props) {
+export function PanelInput({ question, onQuestionChange, isPublic, onIsPublicChange, persona = 'general', parentPanelId, userContext, maxRounds }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [showPaywall, setShowPaywall] = useState(false)
@@ -49,7 +51,7 @@ export function PanelInput({ question, onQuestionChange, isPublic, onIsPublicCha
       const res = await fetch('/api/panels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: trimmed, isPublic, persona, parentPanelId }),
+        body: JSON.stringify({ question: trimmed, isPublic, persona, parentPanelId, userContext: userContext || undefined, maxRounds }),
       })
 
       if (res.status === 402) {
@@ -70,7 +72,7 @@ export function PanelInput({ question, onQuestionChange, isPublic, onIsPublicCha
     } finally {
       setLoading(false)
     }
-  }, [question, isPublic, loading, router])
+  }, [question, isPublic, loading, router, userContext, maxRounds])
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

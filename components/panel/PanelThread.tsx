@@ -68,7 +68,7 @@ export function PanelThread({ panelId, persona = 'general' }: Props) {
 
       {state.status === 'complete' && state.finalAnswer && state.confidence && (
         <>
-          <FinalAnswer answer={state.finalAnswer} confidence={state.confidence} />
+          <FinalAnswer answer={state.finalAnswer} confidence={state.confidence} panelId={panelId} />
           <FollowUpComposer parentPanelId={panelId} parentPersona={persona} />
         </>
       )}

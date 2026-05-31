@@ -21,6 +21,8 @@ export async function POST(request: NextRequest) {
     isPublic = true,
     persona = 'general',
     parentPanelId,
+    userContext,
+    maxRounds: requestedRounds,
   } = body
 
   if (!question || typeof question !== 'string' || question.trim().length < 10) {
@@ -30,11 +32,17 @@ export async function POST(request: NextRequest) {
   // Validate persona key — unknown keys silently fall back to 'general'.
   const resolvedPersona = PERSONA_MAP[persona] ? persona : 'general'
 
+  // Sanitise userContext — max 4000 chars.
+  const sanitisedUserContext =
+    userContext && typeof userContext === 'string'
+      ? userContext.slice(0, 4000).trim()
+      : null
+
   const db = adminDb()
   const userRef = db.collection('users').doc(user.uid)
 
   // Resolve follow-up context from parent panel (outside transaction — read-only).
-  let context: string | null = null
+  let followUpContext: string | null = null
   let resolvedParentPanelId: string | null = null
   if (parentPanelId && typeof parentPanelId === 'string') {
     const parentSnap = await db.collection('panels').doc(parentPanelId).get()
@@ -46,8 +54,16 @@ export async function POST(request: NextRequest) {
       parentData?.finalAnswer
     ) {
       resolvedParentPanelId = parentPanelId
-      context = `Context from a previous panel on a related question:\n${parentData.finalAnswer}`
+      followUpContext = `Context from a previous panel on a related question:\n${parentData.finalAnswer}`
     }
+  }
+
+  // Merge user-provided context with follow-up context.
+  let context: string | null = null
+  if (sanitisedUserContext && followUpContext) {
+    context = `${sanitisedUserContext}\n\n${followUpContext}`
+  } else {
+    context = sanitisedUserContext ?? followUpContext
   }
 
   const panelId = nanoid(12)
@@ -75,6 +91,13 @@ export async function POST(request: NextRequest) {
         throw new Error('FREE_LIMIT_REACHED')
       }
 
+      // Validate maxRounds: free → max 2, pro → max 3.
+      const maxRoundsLimit = tier === 'pro' ? 3 : 2
+      const resolvedMaxRounds =
+        typeof requestedRounds === 'number' && requestedRounds >= 1 && requestedRounds <= maxRoundsLimit
+          ? requestedRounds
+          : Math.min(requestedRounds ?? 2, maxRoundsLimit)
+
       const panelRef = db.collection('panels').doc(panelId)
       tx.set(panelRef, {
         userId: user.uid,
@@ -87,7 +110,7 @@ export async function POST(request: NextRequest) {
         isPublic: isPublic === true,
         createdAt: FieldValue.serverTimestamp(),
         completedAt: null,
-        config: { maxRounds: 2, model: DEFAULT_MODEL },
+        config: { maxRounds: resolvedMaxRounds, model: DEFAULT_MODEL },
         rounds: [],
         finalAnswer: null,
         confidence: null,

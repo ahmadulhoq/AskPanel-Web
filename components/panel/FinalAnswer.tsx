@@ -3,16 +3,17 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Check, Copy } from 'lucide-react'
+import { Check, Copy, Download } from 'lucide-react'
 import { ConfidenceBadge } from './ConfidenceBadge'
 import type { ConfidenceLevel } from '@/types'
 
 interface Props {
   answer: string
   confidence: ConfidenceLevel
+  panelId?: string
 }
 
-export function FinalAnswer({ answer, confidence }: Props) {
+export function FinalAnswer({ answer, confidence, panelId }: Props) {
   const [copied, setCopied] = useState(false)
 
   async function handleCopy() {
@@ -41,14 +42,27 @@ export function FinalAnswer({ answer, confidence }: Props) {
         <div className="flex-1 min-w-0">
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <p className="text-sm font-semibold">Panel</p>
-            <button
-              onClick={handleCopy}
-              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              aria-label="Copy answer"
-            >
-              {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
-              {copied ? 'Copied' : 'Copy'}
-            </button>
+            <div className="flex items-center gap-1">
+              {panelId && (
+                <a
+                  href={`/api/panels/${panelId}/export`}
+                  download
+                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label="Download panel as Markdown"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Export
+                </a>
+              )}
+              <button
+                onClick={handleCopy}
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Copy answer"
+              >
+                {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
           </div>
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{answer}</ReactMarkdown>
