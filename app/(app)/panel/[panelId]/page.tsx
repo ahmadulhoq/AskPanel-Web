@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
 import { PanelThread } from '@/components/panel/PanelThread'
+import { QuestionBubble } from '@/components/panel/QuestionBubble'
 import { Button } from '@/components/ui/button'
 import type { PanelDoc } from '@/types'
 
@@ -53,11 +54,7 @@ export default async function PanelPage({ params }: Props) {
       </header>
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
-        <div className="mb-8 flex justify-end">
-          <div className="max-w-[85%] rounded-2xl bg-primary px-4 py-3 text-primary-foreground">
-            <p className="text-sm leading-relaxed">{panel.question}</p>
-          </div>
-        </div>
+        <QuestionBubble question={panel.question} />
 
         <PanelThread panelId={panelId} />
       </main>

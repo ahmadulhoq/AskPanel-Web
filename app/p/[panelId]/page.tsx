@@ -1,8 +1,10 @@
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { adminDb } from '@/lib/firebase/admin'
 import { FinalAnswer } from '@/components/panel/FinalAnswer'
 import { AgentTurn } from '@/components/panel/AgentTurn'
 import { SynthesisCard } from '@/components/panel/SynthesisCard'
+import { QuestionBubble } from '@/components/panel/QuestionBubble'
 import type { PanelDoc, AgentTurnState, SynthesisState, ConfidenceLevel, SynthesisDecision } from '@/types'
 
 interface Props {
@@ -60,36 +62,54 @@ export default async function PublicPanelPage({ params }: Props) {
   const roundNumbers = [...new Set(turns.map(t => t.round))].sort((a, b) => a - b)
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
-      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        AskPanel · Shared deliberation
-      </div>
-      <h1 className="mb-8 text-lg font-semibold">{panel.question}</h1>
+    <div className="flex min-h-screen flex-col">
+      <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
+          <Link href="/" className="font-bold">AskPanel</Link>
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Shared deliberation
+          </span>
+        </div>
+      </header>
 
-      <div className="space-y-4">
-        {roundNumbers.map(round => (
-          <div key={round} className="space-y-3">
-            {turns
-              .filter(t => t.round === round)
-              .map((turn, i) => (
-                <AgentTurn key={i} turn={turn} />
-              ))}
-            {syntheses
-              .filter(s => s.round === round)
-              .map(s => (
-                <SynthesisCard key={s.round} synthesis={s} />
-              ))}
-          </div>
-        ))}
+      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
+        <QuestionBubble question={panel.question} />
 
-        {panel.finalAnswer && panel.confidence && (
-          <FinalAnswer answer={panel.finalAnswer} confidence={panel.confidence as ConfidenceLevel} />
-        )}
-      </div>
+        <div className="space-y-8">
+          {roundNumbers.map((round, roundIdx) => (
+            <div key={round} className="space-y-6">
+              {roundIdx > 0 && (
+                <div className="flex items-center gap-3">
+                  <div className="h-px flex-1 bg-border" />
+                  <span className="text-xs text-muted-foreground">Round {round}</span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+              )}
+              {turns
+                .filter(t => t.round === round)
+                .map((turn, i) => (
+                  <AgentTurn key={i} turn={turn} />
+                ))}
+              {syntheses
+                .filter(s => s.round === round)
+                .map(s => (
+                  <SynthesisCard key={s.round} synthesis={s} />
+                ))}
+            </div>
+          ))}
 
-      <div className="mt-10 border-t pt-6 text-center text-sm text-muted-foreground">
-        <a href="/" className="underline">Try AskPanel</a> — AI deliberation for questions that matter
-      </div>
-    </main>
+          {panel.finalAnswer && panel.confidence && (
+            <FinalAnswer answer={panel.finalAnswer} confidence={panel.confidence as ConfidenceLevel} />
+          )}
+        </div>
+
+        <div className="mt-12 border-t pt-6 text-center text-sm text-muted-foreground">
+          <Link href="/" className="font-medium text-foreground underline underline-offset-4">
+            Try AskPanel
+          </Link>{' '}
+          — AI deliberation for questions that matter
+        </div>
+      </main>
+    </div>
   )
 }

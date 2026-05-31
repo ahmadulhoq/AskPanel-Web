@@ -1,10 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Textarea } from '@/components/ui/textarea'
-import { Button } from '@/components/ui/button'
+import { ArrowUp } from 'lucide-react'
 import { PaywallDialog } from './PaywallDialog'
+
+const MIN_CHARS = 10
+const MAX_TEXTAREA_HEIGHT = 200
 
 export function PanelInput() {
   const router = useRouter()
@@ -12,10 +14,27 @@ export function PanelInput() {
   const [loading, setLoading] = useState(false)
   const [showPaywall, setShowPaywall] = useState(false)
   const [error, setError] = useState('')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (question.trim().length < 10) return
+  // Grow the textarea to fit its content, capped at MAX_TEXTAREA_HEIGHT.
+  // Resetting to 'auto' first lets the field shrink when text is deleted —
+  // this is what keeps the composer from jumping the page around as you type.
+  const resize = useCallback(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    const next = Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)
+    el.style.height = `${next}px`
+    el.style.overflowY = el.scrollHeight > MAX_TEXTAREA_HEIGHT ? 'auto' : 'hidden'
+  }, [])
+
+  useEffect(() => {
+    resize()
+  }, [question, resize])
+
+  const submit = useCallback(async () => {
+    const trimmed = question.trim()
+    if (trimmed.length < MIN_CHARS || loading) return
 
     setLoading(true)
     setError('')
@@ -24,7 +43,7 @@ export function PanelInput() {
       const res = await fetch('/api/panels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: question.trim() }),
+        body: JSON.stringify({ question: trimmed }),
       })
 
       if (res.status === 402) {
@@ -45,33 +64,69 @@ export function PanelInput() {
     } finally {
       setLoading(false)
     }
+  }, [question, loading, router])
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    submit()
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Enter sends, Shift+Enter inserts a newline — the convention in every
+    // major chat UI (ChatGPT, Claude, Gemini).
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      submit()
+    }
   }
 
   const charCount = question.trim().length
+  const canSubmit = charCount >= MIN_CHARS && !loading
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <Textarea
-          placeholder="What question do you want the panel to deliberate on? Be specific — the more context you give, the better the debate."
-          value={question}
-          onChange={e => setQuestion(e.target.value)}
-          rows={4}
-          className="resize-none"
-          disabled={loading}
-        />
-        <div className="flex items-center justify-between">
-          <span className={`text-xs ${charCount < 10 ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
-            {charCount < 10 ? `${10 - charCount} more characters needed` : `${charCount} characters`}
-          </span>
-          <Button
+      <form onSubmit={handleSubmit}>
+        <div className="relative flex flex-col rounded-3xl border border-input bg-background shadow-sm transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/40">
+          <textarea
+            ref={textareaRef}
+            rows={1}
+            value={question}
+            onChange={e => setQuestion(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={loading}
+            placeholder="Ask the panel anything — the more context you give, the sharper the debate."
+            className="max-h-[200px] w-full resize-none bg-transparent px-4 pt-3.5 pb-12 text-base leading-relaxed outline-none placeholder:text-muted-foreground disabled:opacity-60 md:text-sm"
+          />
+          <button
             type="submit"
-            disabled={loading || charCount < 10}
+            disabled={!canSubmit}
+            aria-label="Ask the panel"
+            className="absolute bottom-2.5 right-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
           >
-            {loading ? 'Starting panel…' : 'Ask the panel'}
-          </Button>
+            {loading ? (
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground/40 border-t-primary-foreground" />
+            ) : (
+              <ArrowUp className="h-4 w-4" strokeWidth={2.5} />
+            )}
+          </button>
         </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        {/* Fixed-height helper row keeps the layout from shifting as hints/errors appear. */}
+        <div className="mt-2 flex min-h-5 items-center justify-between px-2 text-xs text-muted-foreground">
+          <span aria-live="polite">
+            {error ? (
+              <span className="text-destructive">{error}</span>
+            ) : charCount > 0 && charCount < MIN_CHARS ? (
+              `${MIN_CHARS - charCount} more character${MIN_CHARS - charCount !== 1 ? 's' : ''} needed`
+            ) : (
+              ''
+            )}
+          </span>
+          <span className="hidden shrink-0 sm:inline">
+            <kbd className="font-sans font-medium text-foreground/70">Enter</kbd> to send ·{' '}
+            <kbd className="font-sans font-medium text-foreground/70">Shift + Enter</kbd> for a new line
+          </span>
+        </div>
       </form>
 
       <PaywallDialog open={showPaywall} onClose={() => setShowPaywall(false)} />
