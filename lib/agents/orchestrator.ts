@@ -37,7 +37,7 @@ async function* streamAgent(
 async function callSynthesizer(
   prompt: { system: string; user: string },
   model: string,
-): Promise<{ decision: SynthesisDecision; confidence: ConfidenceLevel; reasoning: string; finalAnswer: string }> {
+): Promise<{ decision: SynthesisDecision; confidence: ConfidenceLevel; reasoning: string; issuesFound: number; finalAnswer: string }> {
   const response = await getAnthropicClient().messages.create({
     model,
     max_tokens: 800,
@@ -56,6 +56,7 @@ async function callSynthesizer(
     decision: SynthesisDecision
     confidence: ConfidenceLevel
     reasoning: string
+    issuesFound: number
     finalAnswer: string
   }
   return input
@@ -86,7 +87,7 @@ async function updateRoundField(
 async function updateSynthesisField(
   panelId: string,
   round: number,
-  synthesis: { decision: SynthesisDecision; confidence: ConfidenceLevel; reasoning: string },
+  synthesis: { decision: SynthesisDecision; confidence: ConfidenceLevel; reasoning: string; issuesFound: number },
 ) {
   const db = adminDb()
   const panelRef = db.collection('panels').doc(panelId)
@@ -170,6 +171,7 @@ export async function* runPanel(input: OrchestratorInput): SSEGenerator {
         decision: synthesis.decision,
         confidence: synthesis.confidence,
         reasoning: synthesis.reasoning,
+        issuesFound: synthesis.issuesFound ?? 0,
       })
 
       yield {
@@ -178,6 +180,7 @@ export async function* runPanel(input: OrchestratorInput): SSEGenerator {
         decision: synthesis.decision,
         confidence: synthesis.confidence,
         reasoning: synthesis.reasoning,
+        issuesFound: synthesis.issuesFound ?? 0,
       } satisfies SSEEvent
 
       finalAnswer = synthesis.finalAnswer

@@ -44,6 +44,7 @@ function reducer(state: PanelState, action: Action): PanelState {
         decision: action.decision,
         confidence: action.confidence,
         reasoning: action.reasoning,
+        issuesFound: action.issuesFound ?? 0,
       }
       return { ...state, syntheses: [...state.syntheses, synthesis] }
     }

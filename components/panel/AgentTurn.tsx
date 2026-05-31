@@ -17,9 +17,10 @@ const AGENT_META = {
 
 interface Props {
   turn: AgentTurnState
+  issuesFound?: number
 }
 
-export function AgentTurn({ turn }: Props) {
+export function AgentTurn({ turn, issuesFound }: Props) {
   const meta = AGENT_META[turn.agent]
 
   return (
@@ -30,6 +31,11 @@ export function AgentTurn({ turn }: Props) {
       <div className="flex-1 min-w-0">
         <div className="mb-1.5 flex items-center gap-2">
           <span className="text-sm font-semibold">{meta.label}</span>
+          {turn.agent === 'critic' && issuesFound != null && issuesFound > 0 && (
+            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+              {issuesFound} issue{issuesFound !== 1 ? 's' : ''} found
+            </span>
+          )}
           {turn.streaming && (
             <span className="inline-flex gap-0.5">
               <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:0ms]" />

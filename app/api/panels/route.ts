@@ -13,7 +13,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { question } = await request.json()
+  const body = await request.json()
+  const { question, isPublic = true } = body
   if (!question || typeof question !== 'string' || question.trim().length < 10) {
     return NextResponse.json({ error: 'Question must be at least 10 characters' }, { status: 400 })
   }
@@ -40,8 +41,9 @@ export async function POST(request: NextRequest) {
       tx.set(panelRef, {
         userId: user.uid,
         question: question.trim(),
+        title: null,
         status: 'queued',
-        isPublic: true,
+        isPublic: isPublic === true,
         createdAt: FieldValue.serverTimestamp(),
         completedAt: null,
         config: { maxRounds: 2, model: DEFAULT_MODEL },

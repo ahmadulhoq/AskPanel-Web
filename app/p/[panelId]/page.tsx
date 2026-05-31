@@ -55,6 +55,7 @@ export default async function PublicPanelPage({ params }: Props) {
         decision: round.synthesizer.decision as SynthesisDecision,
         confidence: round.synthesizer.confidence as ConfidenceLevel,
         reasoning: round.synthesizer.reasoning,
+        issuesFound: round.synthesizer.issuesFound ?? 0,
       })
     }
   }

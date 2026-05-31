@@ -40,9 +40,22 @@ export function PanelThread({ panelId }: Props) {
           )}
           {state.turns
             .filter(t => t.round === round)
-            .map((turn, i) => (
-              <AgentTurn key={`${turn.agent}-${round}-${i}`} turn={turn} />
-            ))}
+            .map((turn, i) => {
+              // For the Critic, issuesFound comes from the same-round Synthesizer.
+              // It's null during a live run (synthesis hasn't fired yet) and
+              // appears once synthesis_result arrives, retroactively tagging
+              // the completed Critic turn.
+              const sameSynthesis = turn.agent === 'critic'
+                ? state.syntheses.find(s => s.round === round)
+                : undefined
+              return (
+                <AgentTurn
+                  key={`${turn.agent}-${round}-${i}`}
+                  turn={turn}
+                  issuesFound={sameSynthesis?.issuesFound}
+                />
+              )
+            })}
           {state.syntheses
             .filter(s => s.round === round)
             .map(s => (

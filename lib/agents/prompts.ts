@@ -98,12 +98,16 @@ export const SYNTHESIZER_TOOL: Anthropic.Tool[] = [
           type: 'string',
           description: 'One to three sentences explaining why you reached this decision.',
         },
+        issuesFound: {
+          type: 'number',
+          description: 'How many substantive issues did the Critic raise that meaningfully changed the answer? Use 0 if the Critic agreed or only raised minor points.',
+        },
         finalAnswer: {
           type: 'string',
           description: 'The synthesized final answer in clean markdown. Required for all decisions.',
         },
       },
-      required: ['decision', 'confidence', 'reasoning', 'finalAnswer'],
+      required: ['decision', 'confidence', 'reasoning', 'issuesFound', 'finalAnswer'],
     },
   },
 ]

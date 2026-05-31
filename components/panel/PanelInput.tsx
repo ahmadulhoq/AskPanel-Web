@@ -1,24 +1,28 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowUp } from 'lucide-react'
+import { ArrowUp, Lock, Globe } from 'lucide-react'
 import { PaywallDialog } from './PaywallDialog'
+import { useState } from 'react'
 
 const MIN_CHARS = 10
 const MAX_TEXTAREA_HEIGHT = 200
 
-export function PanelInput() {
+interface Props {
+  question: string
+  onQuestionChange: (value: string) => void
+  isPublic: boolean
+  onIsPublicChange: (value: boolean) => void
+}
+
+export function PanelInput({ question, onQuestionChange, isPublic, onIsPublicChange }: Props) {
   const router = useRouter()
-  const [question, setQuestion] = useState('')
   const [loading, setLoading] = useState(false)
   const [showPaywall, setShowPaywall] = useState(false)
   const [error, setError] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Grow the textarea to fit its content, capped at MAX_TEXTAREA_HEIGHT.
-  // Resetting to 'auto' first lets the field shrink when text is deleted —
-  // this is what keeps the composer from jumping the page around as you type.
   const resize = useCallback(() => {
     const el = textareaRef.current
     if (!el) return
@@ -43,7 +47,7 @@ export function PanelInput() {
       const res = await fetch('/api/panels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: trimmed }),
+        body: JSON.stringify({ question: trimmed, isPublic }),
       })
 
       if (res.status === 402) {
@@ -64,7 +68,7 @@ export function PanelInput() {
     } finally {
       setLoading(false)
     }
-  }, [question, loading, router])
+  }, [question, isPublic, loading, router])
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -72,8 +76,6 @@ export function PanelInput() {
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    // Enter sends, Shift+Enter inserts a newline — the convention in every
-    // major chat UI (ChatGPT, Claude, Gemini).
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       submit()
@@ -91,27 +93,40 @@ export function PanelInput() {
             ref={textareaRef}
             rows={1}
             value={question}
-            onChange={e => setQuestion(e.target.value)}
+            onChange={e => onQuestionChange(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={loading}
             placeholder="Ask the panel anything — the more context you give, the sharper the debate."
             className="max-h-[200px] w-full resize-none bg-transparent px-4 pt-3.5 pb-12 text-base leading-relaxed outline-none placeholder:text-muted-foreground disabled:opacity-60 md:text-sm"
           />
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            aria-label="Ask the panel"
-            className="absolute bottom-2.5 right-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
-          >
-            {loading ? (
-              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground/40 border-t-primary-foreground" />
-            ) : (
-              <ArrowUp className="h-4 w-4" strokeWidth={2.5} />
-            )}
-          </button>
+
+          {/* Bottom toolbar */}
+          <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-3 pb-2.5">
+            <button
+              type="button"
+              onClick={() => onIsPublicChange(!isPublic)}
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label={isPublic ? 'Panel is public — click to make private' : 'Panel is private — click to make public'}
+            >
+              {isPublic ? <Globe className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+              {isPublic ? 'Public' : 'Private'}
+            </button>
+
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              aria-label="Ask the panel"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              {loading ? (
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground/40 border-t-primary-foreground" />
+              ) : (
+                <ArrowUp className="h-4 w-4" strokeWidth={2.5} />
+              )}
+            </button>
+          </div>
         </div>
 
-        {/* Fixed-height helper row keeps the layout from shifting as hints/errors appear. */}
         <div className="mt-2 flex min-h-5 items-center justify-between px-2 text-xs text-muted-foreground">
           <span aria-live="polite">
             {error ? (

@@ -1,7 +1,9 @@
 import Link from 'next/link'
+import { Lock } from 'lucide-react'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
-import { PanelInput } from '@/components/panel/PanelInput'
+import { QuestionComposer } from '@/components/dashboard/QuestionComposer'
+import { SignOutButton } from '@/components/auth/SignOutButton'
 import { Badge } from '@/components/ui/badge'
 import { ConfidenceBadge } from '@/components/panel/ConfidenceBadge'
 import type { PanelDoc, ConfidenceLevel } from '@/types'
@@ -42,6 +44,7 @@ export default async function DashboardPage({
           ) : (
             <Badge variant="default">Pro</Badge>
           )}
+          <SignOutButton />
         </div>
       </div>
 
@@ -52,7 +55,7 @@ export default async function DashboardPage({
       )}
 
       <section className="mb-10">
-        <PanelInput />
+        <QuestionComposer />
       </section>
 
       {panels.length > 0 && (
@@ -67,7 +70,14 @@ export default async function DashboardPage({
                   href={`/panel/${panel.id}`}
                   className="flex items-start justify-between rounded-lg border p-3 hover:bg-muted/50 transition-colors"
                 >
-                  <p className="text-sm line-clamp-2 flex-1 mr-4">{panel.question}</p>
+                  <div className="flex min-w-0 flex-1 items-start gap-2 mr-4">
+                    {!panel.isPublic && (
+                      <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Private" />
+                    )}
+                    <p className="text-sm line-clamp-2">
+                      {panel.title ?? panel.question}
+                    </p>
+                  </div>
                   <div className="flex shrink-0 items-center gap-2">
                     {panel.status === 'complete' && panel.confidence && (
                       <ConfidenceBadge level={panel.confidence as ConfidenceLevel} />

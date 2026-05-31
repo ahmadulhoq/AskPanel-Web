@@ -26,6 +26,7 @@ export interface RoundSynthesis {
   decision: SynthesisDecision
   reasoning: string
   confidence: ConfidenceLevel
+  issuesFound: number
 }
 
 export interface PanelRound {
@@ -43,6 +44,7 @@ export interface PanelConfig {
 export interface PanelDoc {
   userId: string
   question: string
+  title: string | null
   status: PanelStatus
   isPublic: boolean
   createdAt: Timestamp
@@ -60,7 +62,7 @@ export type SSEEvent =
   | { type: 'agent_token'; agent: AgentRole; token: string }
   | { type: 'agent_complete'; agent: AgentRole; round: number; content: string }
   | { type: 'synthesis_start'; round: number }
-  | { type: 'synthesis_result'; round: number; decision: SynthesisDecision; confidence: ConfidenceLevel; reasoning: string }
+  | { type: 'synthesis_result'; round: number; decision: SynthesisDecision; confidence: ConfidenceLevel; reasoning: string; issuesFound: number }
   | { type: 'panel_complete'; finalAnswer: string; confidence: ConfidenceLevel }
   | { type: 'error'; message: string }
 
@@ -77,6 +79,7 @@ export interface SynthesisState {
   decision: SynthesisDecision
   confidence: ConfidenceLevel
   reasoning: string
+  issuesFound: number
 }
 
 export interface PanelState {
