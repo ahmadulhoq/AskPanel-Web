@@ -7,7 +7,7 @@
 
 | ID | Priority | Title | Added | Jira Ticket | Notes |
 |----|----------|-------|-------|-------------|-------|
-| BL-004 | P0 | Rotate exposed Firebase API key & add GCP restrictions | 2026-05-25 | | Key `AIzaSyCATAGc0Qq...` committed in plaintext in 9f2f479d; rotate in GCP Console, apply HTTP referrer + API restrictions; update `apphosting.yaml` with the new value |
+| BL-004 | P0 | Add GCP HTTP referrer restrictions to Firebase API key | 2026-05-25 | | In GCP Console → Credentials → browser key, add `https://askpanel.app/*` as allowed referrer; dismiss GitHub secret scanning alert as false positive |
 | BL-002 | P1 | Deploy to Firebase App Hosting | 2026-05-24 | | Connect GitHub repo in Firebase Console; live URL unlocks BL-003 |
 | BL-003 | P1 | Set up Stripe webhook endpoint in production | 2026-05-24 | | After live URL known; add webhook in Stripe dashboard, set `stripe-webhook-secret` in Secret Manager |
 | BL-020 | P2 | Custom persona builder (Pro) | 2026-05-31 | | User writes their own respondent/critic system prompts; stored per user in Firestore |
