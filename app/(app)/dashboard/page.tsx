@@ -1,13 +1,12 @@
-import Link from 'next/link'
-import { Lock, CornerDownRight } from 'lucide-react'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
 import { QuestionComposer } from '@/components/dashboard/QuestionComposer'
+import { PanelList } from '@/components/dashboard/PanelList'
 import { SignOutButton } from '@/components/auth/SignOutButton'
 import { Badge } from '@/components/ui/badge'
-import { ConfidenceBadge } from '@/components/panel/ConfidenceBadge'
 import { PERSONA_MAP } from '@/lib/agents/personas'
-import type { PanelDoc, ConfidenceLevel } from '@/types'
+import type { PanelDoc } from '@/types'
+import type { PanelSummary } from '@/components/dashboard/PanelList'
 
 export const metadata = { title: 'Dashboard — AskPanel' }
 
@@ -42,7 +41,28 @@ export default async function DashboardPage({
     .limit(20)
     .get()
 
-  const panels = panelsSnap.docs.map(d => ({ id: d.id, ...(d.data() as PanelDoc) }))
+  // Serialise to plain objects — no Timestamps passed to client components.
+  const panels: PanelSummary[] = panelsSnap.docs.map(d => {
+    const data = d.data() as PanelDoc
+    const isCustom = data.persona === 'custom'
+    const personaLabel =
+      isCustom
+        ? (data.customPersona?.label ?? 'Custom')
+        : data.persona !== 'general'
+          ? (PERSONA_MAP[data.persona]?.label ?? data.persona)
+          : null
+    return {
+      id: d.id,
+      question: data.question,
+      title: data.title ?? null,
+      persona: data.persona,
+      personaLabel,
+      status: data.status,
+      isPublic: data.isPublic,
+      parentPanelId: data.parentPanelId ?? null,
+      confidence: data.confidence ?? null,
+    }
+  })
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
@@ -71,51 +91,7 @@ export default async function DashboardPage({
         <QuestionComposer tier={tier} initialCustomPersona={customPersona} />
       </section>
 
-      {panels.length > 0 && (
-        <section>
-          <h2 className="mb-4 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Recent panels
-          </h2>
-          <ul className="space-y-2">
-            {panels.map(panel => (
-              <li key={panel.id}>
-                <Link
-                  href={`/panel/${panel.id}`}
-                  className="flex items-start justify-between rounded-lg border p-3 hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex min-w-0 flex-1 items-start gap-2 mr-4">
-                    {panel.parentPanelId && (
-                      <CornerDownRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Follow-up" />
-                    )}
-                    {!panel.isPublic && !panel.parentPanelId && (
-                      <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Private" />
-                    )}
-                    <p className="text-sm line-clamp-2">
-                      {panel.title ?? panel.question}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {panel.persona && panel.persona !== 'general' && (
-                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        {PERSONA_MAP[panel.persona]?.label ?? panel.persona}
-                      </span>
-                    )}
-                    {panel.status === 'complete' && panel.confidence && (
-                      <ConfidenceBadge level={panel.confidence as ConfidenceLevel} />
-                    )}
-                    {panel.status === 'running' && (
-                      <Badge variant="secondary">Running</Badge>
-                    )}
-                    {panel.status === 'error' && (
-                      <Badge variant="destructive">Error</Badge>
-                    )}
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <PanelList panels={panels} />
     </main>
   )
 }
