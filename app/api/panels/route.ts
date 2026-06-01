@@ -29,8 +29,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Question must be at least 10 characters' }, { status: 400 })
   }
 
-  // Validate persona key — unknown keys silently fall back to 'general'.
-  const resolvedPersona = PERSONA_MAP[persona] ? persona : 'general'
+  // Validate persona key — 'custom' is allowed; unknown keys fall back to 'general'.
+  const resolvedPersona = (persona === 'custom' || PERSONA_MAP[persona]) ? persona : 'general'
 
   // Sanitise userContext — max 4000 chars.
   const sanitisedUserContext =
@@ -98,12 +98,25 @@ export async function POST(request: NextRequest) {
           ? requestedRounds
           : Math.min(requestedRounds ?? 2, maxRoundsLimit)
 
+      // Resolve custom persona (Pro only) — copy prompts onto panel doc so orchestrator
+      // doesn't need a second user-doc read and the panel is self-contained.
+      let resolvedCustomPersona: { label: string; respondentSystem: string; criticSystem: string } | null = null
+      if (resolvedPersona === 'custom' && tier === 'pro') {
+        const cp = userData?.customPersona
+        if (cp?.respondentSystem && cp?.criticSystem) {
+          resolvedCustomPersona = { label: cp.label ?? 'Custom', respondentSystem: cp.respondentSystem, criticSystem: cp.criticSystem }
+        }
+      }
+      // If custom was requested but no persona is saved yet, fall back to general.
+      const finalPersona = resolvedPersona === 'custom' && !resolvedCustomPersona ? 'general' : resolvedPersona
+
       const panelRef = db.collection('panels').doc(panelId)
       tx.set(panelRef, {
         userId: user.uid,
         question: question.trim(),
         title: null,
-        persona: resolvedPersona,
+        persona: finalPersona,
+        customPersona: resolvedCustomPersona,
         parentPanelId: resolvedParentPanelId,
         context,
         status: 'queued',

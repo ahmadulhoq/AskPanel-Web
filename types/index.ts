@@ -6,6 +6,12 @@ export type AgentRole = 'respondent' | 'critic'
 export type SynthesisDecision = 'continue' | 'consensus' | 'contested'
 export type ConfidenceLevel = 'high' | 'medium' | 'low' | 'contested'
 
+export interface CustomPersona {
+  label: string
+  respondentSystem: string
+  criticSystem: string
+}
+
 export interface UserSubscription {
   tier: SubscriptionTier
   stripeCustomerId: string | null
@@ -20,6 +26,7 @@ export interface UserDoc {
   createdAt: Timestamp
   freeRunsUsed: number
   freeRunsResetAt: Timestamp | null
+  customPersona: CustomPersona | null
   subscription: UserSubscription
 }
 
@@ -47,6 +54,7 @@ export interface PanelDoc {
   question: string
   title: string | null
   persona: string
+  customPersona: CustomPersona | null
   parentPanelId: string | null
   context: string | null
   status: PanelStatus

@@ -6,21 +6,30 @@ import { PersonaSelector } from '@/components/panel/PersonaSelector'
 import { ContextInput } from '@/components/panel/ContextInput'
 import { StarterQuestions } from './StarterQuestions'
 import { RoundsSelector } from './RoundsSelector'
+import type { CustomPersona } from '@/types'
 
 interface Props {
   tier: 'free' | 'pro'
+  initialCustomPersona?: CustomPersona | null
 }
 
-export function QuestionComposer({ tier }: Props) {
+export function QuestionComposer({ tier, initialCustomPersona = null }: Props) {
   const [question, setQuestion] = useState('')
   const [isPublic, setIsPublic] = useState(true)
   const [persona, setPersona] = useState('general')
   const [userContext, setUserContext] = useState('')
   const [maxRounds, setMaxRounds] = useState(2)
+  const [customPersona, setCustomPersona] = useState<CustomPersona | null>(initialCustomPersona)
 
   return (
     <div>
-      <PersonaSelector persona={persona} onPersonaChange={setPersona} tier={tier} />
+      <PersonaSelector
+        persona={persona}
+        onPersonaChange={setPersona}
+        tier={tier}
+        customPersona={customPersona}
+        onCustomPersonaChange={setCustomPersona}
+      />
       {question.trim().length === 0 && (
         <StarterQuestions onSelect={setQuestion} />
       )}

@@ -7,13 +7,19 @@ export interface AgentPrompt {
   user: string    // dynamic — not cached
 }
 
+type CustomOverride = { respondentSystem: string; criticSystem: string }
+
 export function buildRespondentPrompt(
   question: string,
   history: ConversationTurn[],
   personaKey = 'general',
   context?: string,
+  custom?: CustomOverride,
 ): AgentPrompt {
-  const persona = getPersona(personaKey)
+  const system = (personaKey === 'custom' && custom)
+    ? custom.respondentSystem
+    : getPersona(personaKey).respondentSystem
+
   const lastCritique = [...history].reverse().find(t => t.role === 'critic')
 
   let user: string
@@ -25,18 +31,22 @@ export function buildRespondentPrompt(
     user = `Question: ${question}`
   }
 
-  return { system: persona.respondentSystem, user }
+  return { system, user }
 }
 
 export function buildCriticPrompt(
   question: string,
   history: ConversationTurn[],
   personaKey = 'general',
+  custom?: CustomOverride,
 ): AgentPrompt {
-  const persona = getPersona(personaKey)
+  const system = (personaKey === 'custom' && custom)
+    ? custom.criticSystem
+    : getPersona(personaKey).criticSystem
+
   const lastRespondent = [...history].reverse().find(t => t.role === 'respondent')
   const user = `Question: ${question}\n\nThe Respondent's answer:\n${lastRespondent?.content ?? ''}`
-  return { system: persona.criticSystem, user }
+  return { system, user }
 }
 
 export function buildSynthesizerPrompt(

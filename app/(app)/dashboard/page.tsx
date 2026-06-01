@@ -33,6 +33,7 @@ export default async function DashboardPage({
   const freeRunsUsed = userData?.freeRunsUsed ?? 0
   const resetDate = formatResetDate(userData?.freeRunsResetAt)
   const runsLeft = Math.max(0, 5 - freeRunsUsed)
+  const customPersona = userData?.customPersona ?? null
 
   const panelsSnap = await db
     .collection('panels')
@@ -67,7 +68,7 @@ export default async function DashboardPage({
       )}
 
       <section className="mb-10">
-        <QuestionComposer tier={tier} />
+        <QuestionComposer tier={tier} initialCustomPersona={customPersona} />
       </section>
 
       {panels.length > 0 && (

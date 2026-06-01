@@ -12,6 +12,7 @@ export interface OrchestratorInput {
   config: PanelConfig
   persona?: string
   context?: string
+  customPersona?: { label: string; respondentSystem: string; criticSystem: string }
 }
 
 export type SSEGenerator = AsyncGenerator<SSEEvent, void, unknown>
