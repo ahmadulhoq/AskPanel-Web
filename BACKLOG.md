@@ -10,7 +10,6 @@
 | BL-004 | P0 | Add GCP HTTP referrer restrictions to Firebase API key | 2026-05-25 | | In GCP Console → Credentials → browser key, add `https://askpanel.app/*` as allowed referrer; dismiss GitHub secret scanning alert as false positive |
 | BL-002 | P1 | Deploy to Firebase App Hosting | 2026-05-24 | | Connect GitHub repo in Firebase Console; live URL unlocks BL-003 |
 | BL-003 | P1 | Set up Stripe webhook endpoint in production | 2026-05-24 | | After live URL known; add webhook in Stripe dashboard, set `stripe-webhook-secret` in Secret Manager |
-| BL-020 | P2 | Custom persona builder (Pro) | 2026-05-31 | | User writes their own respondent/critic system prompts; stored per user in Firestore |
 | BL-021 | P2 | File upload for context (Pro) | 2026-05-31 | | PDF + .txt upload alongside existing URL-fetch; parse server-side, same 4000-char cap |
 | BL-022 | P2 | Dashboard panel search & filter | 2026-05-31 | | Filter by persona, status, date range; client-side on the 20-item list is fine |
 | BL-023 | P2 | Usage / billing page for Pro users | 2026-05-31 | | Show run count, subscription renewal date, link to Stripe customer portal |
@@ -21,6 +20,7 @@
 
 | ID | Title | Completed |
 |----|-------|-----------|
+| BL-020 | Custom persona builder (Pro) | 2026-06-01 |
 | BL-019 | Configurable max rounds 1–3 (Pro gate on round 3) | 2026-05-31 |
 | BL-016 | Panel export as Markdown download | 2026-05-31 |
 | BL-015 | URL + text context injection (Pro only) | 2026-05-31 |
