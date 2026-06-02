@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { ChevronDown, ChevronUp, Link2, Loader2, Lock } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { ChevronDown, ChevronUp, Link2, Loader2, Lock, Paperclip } from 'lucide-react'
 import { PaywallDialog } from './PaywallDialog'
 
 interface Props {
@@ -13,9 +13,12 @@ interface Props {
 export function ContextInput({ tier, value, onChange }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [url, setUrl] = useState('')
-  const [fetching, setFetching] = useState(false)
-  const [fetchError, setFetchError] = useState('')
+  const [fetchingUrl, setFetchingUrl] = useState(false)
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const [fileName, setFileName] = useState('')
+  const [error, setError] = useState('')
   const [showPaywall, setShowPaywall] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   function handleToggle() {
     if (tier !== 'pro') {
@@ -27,9 +30,9 @@ export function ContextInput({ tier, value, onChange }: Props) {
 
   async function fetchUrl() {
     const trimmed = url.trim()
-    if (!trimmed || fetching) return
-    setFetching(true)
-    setFetchError('')
+    if (!trimmed || fetchingUrl) return
+    setFetchingUrl(true)
+    setError('')
     try {
       const res = await fetch('/api/context/extract', {
         method: 'POST',
@@ -38,18 +41,48 @@ export function ContextInput({ tier, value, onChange }: Props) {
       })
       if (!res.ok) {
         const data = await res.json()
-        setFetchError(data.error ?? 'Failed to fetch URL')
+        setError(data.error ?? 'Failed to fetch URL')
         return
       }
       const { text } = await res.json()
       onChange(value ? `${value}\n\n${text}` : text)
       setUrl('')
     } catch {
-      setFetchError('Network error. Please try again.')
+      setError('Network error. Please try again.')
     } finally {
-      setFetching(false)
+      setFetchingUrl(false)
     }
   }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setFileName(file.name)
+    setUploadingFile(true)
+    setError('')
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch('/api/context/upload', { method: 'POST', body: form })
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data.error ?? 'Failed to read file')
+        setFileName('')
+        return
+      }
+      const { text } = await res.json()
+      onChange(value ? `${value}\n\n${text}` : text)
+    } catch {
+      setError('Network error. Please try again.')
+      setFileName('')
+    } finally {
+      setUploadingFile(false)
+      // Reset so the same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const busy = fetchingUrl || uploadingFile
 
   return (
     <>
@@ -75,6 +108,7 @@ export function ContextInput({ tier, value, onChange }: Props) {
 
         {expanded && (
           <div className="mt-2 space-y-2 rounded-xl border border-input bg-muted/30 p-3">
+            {/* URL fetch row */}
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Link2 className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -95,17 +129,43 @@ export function ContextInput({ tier, value, onChange }: Props) {
               <button
                 type="button"
                 onClick={fetchUrl}
-                disabled={!url.trim() || fetching}
+                disabled={!url.trim() || busy}
                 className="flex items-center gap-1 rounded-lg bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground transition-opacity hover:opacity-80 disabled:opacity-40"
               >
-                {fetching ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Fetch'}
+                {fetchingUrl ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Fetch'}
               </button>
             </div>
 
-            {fetchError && (
-              <p className="text-xs text-destructive">{fetchError}</p>
-            )}
+            {/* File upload row */}
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf"
+                onChange={handleFileChange}
+                className="hidden"
+                id="context-file-input"
+              />
+              <label
+                htmlFor="context-file-input"
+                className={`flex cursor-pointer items-center gap-1.5 rounded-lg border border-input bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground ${busy ? 'pointer-events-none opacity-40' : ''}`}
+              >
+                {uploadingFile ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Paperclip className="h-3 w-3" />
+                )}
+                {uploadingFile ? 'Reading…' : 'Upload file'}
+              </label>
+              {fileName && !uploadingFile && (
+                <span className="truncate text-xs text-muted-foreground">{fileName}</span>
+              )}
+              <span className="ml-auto text-xs text-muted-foreground">.txt · .md · .pdf</span>
+            </div>
 
+            {error && <p className="text-xs text-destructive">{error}</p>}
+
+            {/* Context textarea */}
             <textarea
               rows={3}
               value={value}
@@ -116,12 +176,10 @@ export function ContextInput({ tier, value, onChange }: Props) {
 
             {value && (
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">
-                  {value.length} chars
-                </span>
+                <span className="text-xs text-muted-foreground">{value.length} chars</span>
                 <button
                   type="button"
-                  onClick={() => onChange('')}
+                  onClick={() => { onChange(''); setFileName('') }}
                   className="text-xs text-muted-foreground transition-colors hover:text-destructive"
                 >
                   Clear
