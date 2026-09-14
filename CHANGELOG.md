@@ -1,5 +1,14 @@
 # Agent Changelog: askpanel-web
 
+## 2026-09-14 — BL-023: usage/billing account page
+
+- New `/account` page (server component): shows current tier, free-run count + reset date, or Pro renewal date
+- `POST /api/stripe/portal`: creates a Stripe Billing Portal session for Pro users with a `stripeCustomerId`
+- `BillingPortalButton` client component redirects to the returned portal URL
+- Dashboard header gets an "Account" link
+- Committed to `main` directly (ee14b0e) per confirmed direct-to-main flow
+- BACKLOG.md: moved BL-021, BL-022, BL-023 to Done (were shipped earlier this session but not previously marked); added BL-024–BL-027 from cartography TECH_DEBT/DEPENDENCY_ALERTS findings
+
 ## 2026-09-14 — Full cartography pass
 
 - Mapped all 19 modules / 61 source files (split-symbols mode) — `.memory/symbols/*.md`, `SYMBOLS.md` index, `MAP.md` architecture doc

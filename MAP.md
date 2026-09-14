@@ -21,9 +21,10 @@
 | `app/api/panels/` | Panel creation, SSE stream, export, retry | `POST /api/panels`, `GET .../stream`, `GET .../export`, `POST .../retry` |
 | `app/api/context/` | Pro context extraction (URL + file) | `POST /api/context/extract`, `POST /api/context/upload` |
 | `app/api/auth/session/` | Session cookie lifecycle | `POST`/`DELETE /api/auth/session` |
-| `app/api/stripe/` | Checkout + webhook | `POST create-checkout`, `POST webhook` |
+| `app/api/stripe/` | Checkout, billing portal, webhook | `POST create-checkout`, `POST portal`, `POST webhook` |
 | `app/api/user/persona/` | Custom persona CRUD | `PUT`/`DELETE /api/user/persona` |
-| `app/(app)/` | Auth-protected pages | dashboard, panel/[panelId] |
+| `app/(app)/` | Auth-protected pages | dashboard, panel/[panelId], account |
+| `components/account/` | Billing portal redirect | BillingPortalButton |
 | `app/(auth)/` | Sign-in/sign-up page | login |
 | `app/p/[panelId]/` | Public share view (no auth) | — |
 | `app/` (root) | Root layout + landing page | — |
