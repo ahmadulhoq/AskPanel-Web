@@ -1,8 +1,10 @@
+import Link from 'next/link'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
 import { QuestionComposer } from '@/components/dashboard/QuestionComposer'
 import { PanelList } from '@/components/dashboard/PanelList'
 import { SignOutButton } from '@/components/auth/SignOutButton'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { PERSONA_MAP } from '@/lib/agents/personas'
 import type { PanelDoc } from '@/types'
@@ -77,6 +79,11 @@ export default async function DashboardPage({
           ) : (
             <Badge variant="default">Pro</Badge>
           )}
+          <Link href="/account">
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+              Account
+            </Button>
+          </Link>
           <SignOutButton />
         </div>
       </div>
