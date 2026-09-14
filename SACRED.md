@@ -65,6 +65,15 @@
 - **Added by:** cartographer (2026-09-14)
 - **Rule:** Never rename this cookie without first confirming Firebase App Hosting's current documented behavior for session cookies.
 
+## S008 — Server-component `redirect('/login')` handles what proxy.ts intentionally skips
+
+- **Location:** `app/(app)/layout.tsx` and `app/(app)/panel/[panelId]/page.tsx` — both call `redirect('/login')` when `getSessionUser()` returns `null`
+- **What it looks like:** Contradicts the literal wording of `.claude/rules/repo-rules.md`'s Auth Rules ("Never redirect to login inside server components — use the proxy.ts guard"), so it could look like a rule violation waiting to be "cleaned up."
+- **Why it exists:** `proxy.ts` deliberately does a lightweight check only — cookie *presence*, not cryptographic *validity* (its own comment: "we avoid importing [firebase-admin] in middleware to keep edge bundle small"). A present-but-invalid cookie (expired, tampered, revoked, or a user Firestore doc deleted) passes `proxy.ts` and only fails in `getSessionUser()`'s full `verifySessionCookie()` call inside the server component. The server-component redirect is the only thing that catches that case — it is defense-in-depth, not redundant with `proxy.ts`.
+- **Confidence:** High — resolved via user triage (NR-001, 2026-09-14): "Rule wording is wrong, code is correct."
+- **Added by:** cartographer (2026-09-14), triaged with user
+- **Rule:** Do not remove these `redirect('/login')` calls to "match" the written rule. Instead, `.claude/rules/repo-rules.md`'s wording should be corrected (flagged separately — see CHANGELOG) to: "proxy.ts only checks cookie presence, not validity, to keep the edge bundle small. Server components/route handlers must still redirect on `getSessionUser() === null` to catch invalid/expired cookies."
+
 ## S007 — Persist-before-stream: panel doc created before SSE stream opens
 
 - **Location:** `app/api/panels/route.ts` (creates the Firestore panel doc, `status: 'queued'`) is always called and awaited BEFORE the client ever opens `GET /api/panels/[panelId]/stream`
