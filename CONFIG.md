@@ -12,7 +12,7 @@
 | Platform | web |
 | Description | Multi-agent AI deliberation web app — users ask questions, AI agents debate and produce stress-tested answers |
 | Memory branch | ai-memory |
-| Status | pilot |
+| Status | active |
 
 **Status values:**
 - `pilot` — setup complete, cartography not yet done
