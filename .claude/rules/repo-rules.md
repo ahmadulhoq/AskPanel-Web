@@ -16,7 +16,7 @@
 
 ## Auth Rules
 - Session cookie name is `__session` (Firebase App Hosting convention)
-- Never redirect to login inside server components — use the `proxy.ts` guard
+- `proxy.ts` only checks cookie *presence*, not validity — it deliberately avoids importing `firebase-admin` to keep the edge bundle small. It does NOT catch an expired/tampered/revoked cookie. Server components and route handlers must still redirect to `/login` when `getSessionUser()` returns `null` (e.g. `app/(app)/layout.tsx`, `app/(app)/panel/[panelId]/page.tsx`) — that redirect is load-bearing defense-in-depth, not redundant with `proxy.ts`. See `.memory/SACRED.md` S008.
 
 ## Firestore
 - The composite index `panels: userId ASC + createdAt DESC` must exist before the dashboard query runs
