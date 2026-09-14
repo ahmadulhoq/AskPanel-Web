@@ -1,0 +1,28 @@
+# Module: components/panel
+
+**Responsibility:** All panel-view UI — the chat-style thread, composer, persona/context/rounds controls, and result presentation.
+
+## Components
+
+| Name | File | Responsibility |
+|---|---|---|
+| `AgentTurn` | AgentTurn.tsx | Renders one Respondent/Critic turn: colored avatar circle (blue/amber), markdown content, streaming indicator (bouncing dots), and the "N issues found" amber pill on Critic turns (only when `issuesFound` is provided and > 0). |
+| `ConfidenceBadge` | ConfidenceBadge.tsx | Maps `ConfidenceLevel` → `{ label, shadcn Badge variant }` (high→default, medium→secondary, low→outline, contested→destructive) |
+| `ContextInput` | ContextInput.tsx | Collapsible Pro-gated panel: URL-fetch row (calls `/api/context/extract`), file-upload row (calls `/api/context/upload`, `.txt/.md/.pdf` accept filter), and a free-text textarea — all three append to the same `value` via `onChange`. Non-Pro click opens `PaywallDialog` instead of expanding. |
+| `CustomPersonaEditor` | CustomPersonaEditor.tsx | Dialog form: label + two prompt textareas (min 20 chars each, 2000-char cap with live counters). Saves via `PUT /api/user/persona`, calls `onSaved(customPersona)` then closes. Form state resyncs from `initial` whenever `open` becomes true (so re-opening to edit shows current values, not stale state from a previous open). |
+| `FinalAnswer` | FinalAnswer.tsx | Renders the synthesized final answer as markdown with a `ConfidenceBadge`. Header row has Copy (clipboard) and, when `panelId` is passed, an Export link (`<a href="/api/panels/{id}/export" download>`) — plain anchor tag, not a fetch, so the browser handles the download natively. |
+| `FollowUpComposer` | FollowUpComposer.tsx | Auto-growing textarea (capped 160px, same resize pattern as `PanelInput`). POSTs `{ question, parentPanelId, persona: parentPersona, isPublic: true }` to `/api/panels`. See TD-003 — `isPublic` is hardcoded true, doesn't inherit parent's actual privacy setting. |
+| `PanelInput` | PanelInput.tsx | Main composer textarea (JS-controlled auto-grow, capped 200px, Enter-to-send/Shift+Enter-newline). Bottom toolbar: Public/Private toggle (Globe/Lock icon), submit button. POSTs `{ question, isPublic, persona, parentPanelId, userContext, maxRounds }` to `/api/panels`; 402 response opens `PaywallDialog`. |
+| `PanelThread` | PanelThread.tsx | The live thread view — consumes `usePanel(panelId)`. Groups `turns`/`syntheses` by round number, renders a "Round N" divider between groups. For each Critic turn, looks up the SAME round's synthesis to get `issuesFound` (not the previous round's — synthesis for round N always follows both agents in round N). Renders `FinalAnswer` + `FollowUpComposer` when complete, or the error state + `RetryButton` when errored. Auto-scrolls to bottom on any state change via a bottom `ref`. |
+| `PaywallDialog` | PaywallDialog.tsx | Shared upgrade-prompt dialog. Lists current Pro feature set (100 runs/mo, all 5 personas, 3 rounds, context injection, Markdown export). "Upgrade to Pro" calls `POST /api/stripe/create-checkout` and redirects to the returned Stripe URL. |
+| `PersonaSelector` | PersonaSelector.tsx | Renders the 5 built-in persona pills (locked ones show a Lock icon, click opens `PaywallDialog`) plus a Custom pill: dashed/empty state if no custom persona saved yet (click opens `CustomPersonaEditor`), filled state once saved (click selects it, separate pencil icon re-opens the editor). |
+| `QuestionBubble` | QuestionBubble.tsx | Shared right-aligned chat bubble for the user's question — used by both the authenticated panel page and the public share page, keeping visual presentation identical between the two surfaces. |
+| `RetryButton` | RetryButton.tsx | Calls `POST /api/panels/[panelId]/retry`, then `window.location.reload()` on success — full page reload rather than client-side state reset, since a fresh SSE subscription is needed against the now-`queued` panel doc. |
+| `ShareButton` | ShareButton.tsx | Uses `navigator.share()` on mobile/supporting browsers, falls back to `navigator.clipboard.writeText()` + a 2s "Copied" state on desktop. Errors from either (user cancelled share, clipboard denied) are silently swallowed — no error UI, by design (not worth alarming the user over a share cancel). |
+| `SynthesisCard` | SynthesisCard.tsx | Renders the Synthesizer's decision as a centered pill (continue=amber/↻, consensus=green/✓, contested=red/⚑) plus the reasoning text below it, between round dividers. |
+
+## Notes / Findings
+- No FIXME/TODO/HACK comments found.
+- See TD-003 (TECH_DEBT.md) — `FollowUpComposer` hardcodes `isPublic: true`.
+- `PanelInput` and `FollowUpComposer` both implement the same JS-controlled textarea auto-grow logic (reset height to `'auto'`, measure `scrollHeight`, clamp to a max) independently rather than sharing a hook — small duplication (~10 lines), not flagged as urgent TECH_DEBT since the two components have different max-heights (200px vs 160px) and slightly different toolbars, but a `useAutoGrowTextarea(maxHeight)` hook would be a reasonable extraction if a third composer-like component is ever added.
+- `PersonaSelector`'s custom-pill click logic (`handleCustomClick`) has a branch that's easy to misread: clicking the FILLED custom pill selects it (`onPersonaChange('custom')`), while clicking the separate pencil icon next to it opens the editor — clicking the pill itself when one already exists does NOT open the editor. This is intentional (matches the built-in persona pills' click-to-select behavior) but worth knowing if extending this component.
