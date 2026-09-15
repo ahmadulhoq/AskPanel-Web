@@ -1,5 +1,14 @@
 # Agent Changelog: askpanel-web
 
+## 2026-09-15 — BL-024–027: security fix + two bug fixes + doc corrections
+
+- BL-024: closed the SSRF DNS-rebinding gap in `app/api/context/extract` — resolves hostname via `dns.promises.lookup()` and checks every returned IP; switched to manual redirect handling (`redirect: 'manual'`) so each hop is independently re-validated before being followed (fetch's automatic redirect-following previously bypassed the hostname check entirely)
+- BL-025: `FollowUpComposer` now inherits the parent panel's `isPublic` (threaded `PanelPage` → `PanelThread` → `FollowUpComposer`) instead of hardcoding `true`
+- BL-026: removed `field-sizing-content` from the shared `components/ui/textarea.tsx` — the property that caused this project's original jumping-textarea bug; it's still unused but no longer a landmine
+- BL-027: corrected "Next.js 15" → "Next.js 16" and the false "Node 25" claim across `.claude/rules/repo-rules.md`, `.agents/rules/repo-rules.md` (also brought its auth-rule wording in sync with the S008/NR-001 fix, which had only reached the `.claude/` copy), `AGENTS.md`, `docs/engineering/plans/mvp-architecture.md`
+- TECH_DEBT.md: TD-001, TD-003, TD-004 moved to Resolved; DEPENDENCY_ALERTS.md: DA-001, DA-002 moved to Resolved
+- BACKLOG.md: BL-024–027 moved to Done
+
 ## 2026-09-14 — BL-023: usage/billing account page
 
 - New `/account` page (server component): shows current tier, free-run count + reset date, or Pro renewal date

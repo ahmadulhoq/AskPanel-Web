@@ -57,9 +57,8 @@
 - Post-complete: `freeRunsUsed` incremented for non-pro users; `generatePanelTitle()` fired (not awaited)
 
 ### Follow-up Panel
-- Entry: `FollowUpComposer` (rendered after `FinalAnswer` on a completed panel) → `POST /api/panels` with `parentPanelId` + inherited `persona`
+- Entry: `FollowUpComposer` (rendered after `FinalAnswer` on a completed panel) → `POST /api/panels` with `parentPanelId` + inherited `persona` + inherited `isPublic` (`panel.isPublic` threaded down from `PanelPage`, fixed 2026-09-15 BL-025 — see TECH_DEBT.md Resolved TD-003)
 - Context injection: parent panel's `finalAnswer` is fetched (ownership-checked, outside the transaction) and merged with any user-provided context, stored as `context` on the new panel doc, injected into the Respondent's round-1 prompt only
-- Known gap: `isPublic` is NOT inherited from the parent — always `true` (TD-003)
 
 ### SSE Reconnection / Page Refresh Mid-Run
 - `GET /api/panels/[panelId]/stream` always calls `replayRounds(panelData.rounds ?? [])` first — converts already-persisted rounds back into synthetic SSE events — before either (a) emitting `panel_complete` immediately (if `status === 'complete'`) or (b) continuing with the live `runPanel()` generator (if still queued/running)
@@ -83,5 +82,5 @@
 - Downgrade: `customer.subscription.deleted` webhook → `tier: 'free'`
 
 ## Technical Debt & Notes
-- See `.memory/TECH_DEBT.md` for the full registry (TD-001 through TD-004 as of this cartography pass: SSRF DNS-rebinding gap, import style nit, FollowUpComposer isPublic hardcoded true, unused-but-buggy shared Textarea primitive).
+- See `.memory/TECH_DEBT.md` for the full registry. TD-001, TD-003, TD-004 (SSRF DNS-rebinding gap, FollowUpComposer isPublic hardcoded, unused-but-buggy shared Textarea) were fixed 2026-09-15 (BL-024/025/026) — see the Resolved section. TD-002 (minor import style in api-auth) remains open, low severity.
 - See `.memory/SACRED.md` (S001–S008) for behaviors that look wrong but are intentional — read before "cleaning up" anything that looks like an inconsistency in orchestrator.ts, lib/firebase/admin.ts, lib/auth.ts, proxy.ts, or the panel-creation/stream ordering.
