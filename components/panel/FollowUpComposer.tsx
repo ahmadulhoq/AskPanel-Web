@@ -7,11 +7,12 @@ import { ArrowUp } from 'lucide-react'
 interface Props {
   parentPanelId: string
   parentPersona: string
+  parentIsPublic?: boolean
 }
 
 const MAX_HEIGHT = 160
 
-export function FollowUpComposer({ parentPanelId, parentPersona }: Props) {
+export function FollowUpComposer({ parentPanelId, parentPersona, parentIsPublic = true }: Props) {
   const router = useRouter()
   const [question, setQuestion] = useState('')
   const [loading, setLoading] = useState(false)
@@ -42,7 +43,7 @@ export function FollowUpComposer({ parentPanelId, parentPersona }: Props) {
           question: trimmed,
           parentPanelId,
           persona: parentPersona,
-          isPublic: true,
+          isPublic: parentIsPublic,
         }),
       })
       if (res.status === 402) {
@@ -61,7 +62,7 @@ export function FollowUpComposer({ parentPanelId, parentPersona }: Props) {
     } finally {
       setLoading(false)
     }
-  }, [question, loading, parentPanelId, parentPersona, router])
+  }, [question, loading, parentPanelId, parentPersona, parentIsPublic, router])
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {

@@ -4,10 +4,10 @@
 > It is never overwritten by setup or sync.
 
 ## Stack Constraints
-- **Next.js 15**: middleware is `proxy.ts`, export is named `proxy` (not `middleware`)
+- **Next.js 16**: middleware is `proxy.ts`, export is named `proxy` (not `middleware`) — this is a Next.js 16 feature, runs on the Node.js runtime (not edge)
 - **Firebase Admin**: private key env var requires `.replace(/\\n/g, '\n')` — see `lib/firebase/admin.ts`
 - **Anthropic / Stripe / Firebase clients**: all lazy-initialized via getter functions to prevent SSR build failures
-- **Node 25**: `.bin/` wrappers broken — invoke via `node node_modules/...` directly
+- **Node.js**: no version pinned via `.nvmrc`/`engines.node`; `.bin/` wrappers are broken in this environment regardless of version — invoke via `node node_modules/...` directly
 
 ## Agent Orchestration Rules
 - The `isFinalRound` hard-guard in `orchestrator.ts` must never be removed — it prevents infinite loops when Synthesizer returns 'continue' on the last round

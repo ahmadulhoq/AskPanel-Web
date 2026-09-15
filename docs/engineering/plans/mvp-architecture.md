@@ -1,12 +1,12 @@
 # AskPanel Web — MVP Engineering Plan
 
 ## Context
-Greenfield build of AskPanel: a multi-agent AI deliberation web app. User submits a question → 3 agents (Respondent, Critic, Synthesizer) debate it in rounds → structured final answer with confidence level. Core IP is the orchestration loop. Stack: Next.js 15, Firebase (Auth + Firestore + App Hosting), Anthropic Claude, Stripe. SSE streaming, auth-required, public shareable panels.
+Greenfield build of AskPanel: a multi-agent AI deliberation web app. User submits a question → 3 agents (Respondent, Critic, Synthesizer) debate it in rounds → structured final answer with confidence level. Core IP is the orchestration loop. Stack: Next.js 16, Firebase (Auth + Firestore + App Hosting), Anthropic Claude, Stripe. SSE streaming, auth-required, public shareable panels.
 
 ---
 
 ## Confirmed Decisions
-- Next.js 15 (App Router, TypeScript, strict)
+- Next.js 16 (App Router, TypeScript, strict)
 - Tailwind CSS + shadcn/ui
 - Firebase Auth (Google OAuth primary, email/password secondary)
 - Firestore (NoSQL, document-shaped panel runs)

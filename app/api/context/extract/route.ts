@@ -1,14 +1,21 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import { lookup } from 'node:dns/promises'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
 
 const MAX_CONTEXT_CHARS = 4000
+const MAX_REDIRECTS = 3
+const FETCH_TIMEOUT_MS = 10_000
 
-// Prevent SSRF by blocking private/loopback/link-local addresses.
-function isPrivateHost(hostname: string): boolean {
-  const h = hostname.toLowerCase()
-  if (h === 'localhost' || h === '127.0.0.1' || h === '::1') return true
+// Prevent SSRF by blocking private/loopback/link-local/reserved addresses.
+function isPrivateIp(address: string): boolean {
+  const h = address.toLowerCase()
+  if (h === '127.0.0.1' || h === '::1' || h === '::') return true
   if (h === '169.254.169.254') return true // GCP/AWS metadata
+  // IPv6 unique local (fc00::/7) and link-local (fe80::/10)
+  if (h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe8') || h.startsWith('fe9') || h.startsWith('fea') || h.startsWith('feb')) {
+    if (h.includes(':')) return true
+  }
   const ipv4 = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/)
   if (ipv4) {
     const [a, b] = [Number(ipv4[1]), Number(ipv4[2])]
@@ -20,6 +27,25 @@ function isPrivateHost(hostname: string): boolean {
     if (a === 0) return true
   }
   return false
+}
+
+function isPrivateHost(hostname: string): boolean {
+  const h = hostname.toLowerCase()
+  if (h === 'localhost') return true
+  return isPrivateIp(h)
+}
+
+// Resolves the hostname and checks every returned address — closes the DNS-rebinding
+// gap where a public hostname resolves to a private/internal IP.
+async function resolvesToPrivateAddress(hostname: string): Promise<boolean> {
+  if (isPrivateHost(hostname)) return true
+  try {
+    const addresses = await lookup(hostname, { all: true })
+    return addresses.some(addr => isPrivateIp(addr.address))
+  } catch {
+    // Unresolvable host — treat as unsafe rather than silently allowing the fetch to fail later.
+    return true
+  }
 }
 
 function stripHtml(html: string): string {
@@ -35,6 +61,38 @@ function stripHtml(html: string): string {
     .replace(/&#39;/g, "'")
     .replace(/\s{2,}/g, ' ')
     .trim()
+}
+
+class SSRFError extends Error {}
+
+// Follows redirects manually (fetch's automatic redirect-following would bypass our
+// hostname/IP validation on each hop) — each hop is re-validated before following.
+async function safeFetch(startUrl: URL): Promise<Response> {
+  let current = startUrl
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    if (current.protocol !== 'http:' && current.protocol !== 'https:') {
+      throw new SSRFError('Only http and https URLs are supported')
+    }
+    if (await resolvesToPrivateAddress(current.hostname)) {
+      throw new SSRFError('URL points to a private or reserved address')
+    }
+
+    const response = await fetch(current.toString(), {
+      headers: { 'User-Agent': 'AskPanel/1.0 (+https://askpanel.app)' },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      redirect: 'manual',
+    })
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location')
+      if (!location) return response
+      current = new URL(location, current)
+      continue
+    }
+
+    return response
+  }
+  throw new SSRFError('Too many redirects')
 }
 
 export async function POST(request: NextRequest) {
@@ -68,15 +126,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Only http and https URLs are supported' }, { status: 400 })
   }
 
-  if (isPrivateHost(parsed.hostname)) {
-    return NextResponse.json({ error: 'URL points to a private or reserved address' }, { status: 400 })
-  }
-
   try {
-    const response = await fetch(parsed.toString(), {
-      headers: { 'User-Agent': 'AskPanel/1.0 (+https://askpanel.app)' },
-      signal: AbortSignal.timeout(10_000),
-    })
+    const response = await safeFetch(parsed)
 
     if (!response.ok) {
       return NextResponse.json({ error: `Failed to fetch URL: HTTP ${response.status}` }, { status: 422 })
@@ -100,6 +151,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ text })
   } catch (err) {
+    if (err instanceof SSRFError) {
+      return NextResponse.json({ error: err.message }, { status: 400 })
+    }
     const message = err instanceof Error ? err.message : 'Failed to fetch URL'
     return NextResponse.json({ error: message }, { status: 422 })
   }

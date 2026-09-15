@@ -11,9 +11,10 @@ import { RetryButton } from './RetryButton'
 interface Props {
   panelId: string
   persona?: string
+  isPublic?: boolean
 }
 
-export function PanelThread({ panelId, persona = 'general' }: Props) {
+export function PanelThread({ panelId, persona = 'general', isPublic = true }: Props) {
   const state = usePanel(panelId)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -70,7 +71,7 @@ export function PanelThread({ panelId, persona = 'general' }: Props) {
       {state.status === 'complete' && state.finalAnswer && state.confidence && (
         <>
           <FinalAnswer answer={state.finalAnswer} confidence={state.confidence} panelId={panelId} />
-          <FollowUpComposer parentPanelId={panelId} parentPersona={persona} />
+          <FollowUpComposer parentPanelId={panelId} parentPersona={persona} parentIsPublic={isPublic} />
         </>
       )}
 
