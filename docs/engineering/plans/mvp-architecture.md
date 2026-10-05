@@ -11,7 +11,7 @@ Greenfield build of AskPanel: a multi-agent AI deliberation web app. User submit
 - Firebase Auth (Google OAuth primary, email/password secondary)
 - Firestore (NoSQL, document-shaped panel runs)
 - Firebase App Hosting (Cloud Run, supports long-lived SSE)
-- Anthropic SDK — Claude Sonnet 4.5
+- Anthropic SDK — Claude Sonnet 5.5 (`claude-sonnet-5-5`; migrated from Sonnet 4.5 ahead of its 2026-11-30 end-of-life)
 - SSE streaming with persist-first (Firestore doc created before stream opens)
 - Auth-required from run 1 (no anonymous usage)
 - Public share view at `/p/[panelId]` (no login to view)
@@ -47,7 +47,7 @@ createdAt: Timestamp
 completedAt: Timestamp | null
 config: {
   maxRounds: number         // 2 for MVP
-  model: string             // 'claude-sonnet-4-5'
+  model: string             // 'claude-sonnet-5-5' (DEFAULT_MODEL at creation; reset to current on retry)
 }
 rounds: Array<{
   roundNumber: number

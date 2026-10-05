@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
+import { DEFAULT_MODEL } from '@/lib/anthropic'
 
 export async function POST(
   _request: NextRequest,
@@ -34,6 +35,8 @@ export async function POST(
     finalAnswer: null,
     confidence: null,
     completedAt: null,
+    // A retry starts over, so move it onto the current model — the stored one may be retired.
+    'config.model': DEFAULT_MODEL,
   })
 
   return NextResponse.json({ ok: true })
