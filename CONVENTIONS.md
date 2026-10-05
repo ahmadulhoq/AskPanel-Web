@@ -24,7 +24,7 @@
 ## Common Utilities
 - `lib/auth.ts` → `getSessionUser()` — the only sanctioned way to read the authenticated user in a server component or route handler; wraps Firebase Admin `verifySessionCookie()`.
 - `lib/firebase/admin.ts` → `adminDb()` — lazy Firestore Admin client getter.
-- `lib/anthropic.ts` → `getAnthropicClient()`, `DEFAULT_MODEL` constant (`claude-sonnet-4-5`).
+- `lib/anthropic.ts` → `getAnthropicClient()`, `DEFAULT_MODEL` constant (`claude-sonnet-5-5`). Panels pin `config.model` at creation — when changing models, also handle stored panels (the retry route resets it).
 - `lib/utils.ts` → `cn()` (shadcn's clsx+tailwind-merge helper), used in every component for conditional className composition.
 - Pro-gated UI pattern: every Pro-only affordance (persona lock, rounds selector round 3, context input, custom persona) follows the same shape — a lock icon + `onClick` opens `<PaywallDialog>` rather than disabling the control outright.
 
