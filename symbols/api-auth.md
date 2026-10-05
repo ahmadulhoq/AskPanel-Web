@@ -10,5 +10,5 @@
 | `DELETE /api/auth/session` | session/route.ts | Clears the `__session` cookie — sign-out. |
 
 ## Notes / Findings
-- **Minor style nit (low-severity TECH_DEBT):** two separate `import` statements from `@/lib/firebase/admin` on consecutive lines (`adminDb` then `adminAuth`) instead of one combined `import { adminDb, adminAuth } from ...`. Purely cosmetic, zero functional impact — logged in TECH_DEBT.md as a trivial cleanup, not worth a dedicated task.
+- Duplicate `firebase-admin` imports were merged 2026-10-05 (TD-002 resolved).
 - New-user doc does NOT set `freeRunsResetAt` or `customPersona` at creation — both are read with `?? null`/`?? 0` fallbacks everywhere they're used (`POST /api/panels`, `app/(app)/dashboard/page.tsx`), so this is safe, not a bug. Noting it so a future schema change doesn't assume these fields are always present from creation.

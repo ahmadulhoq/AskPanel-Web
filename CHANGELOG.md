@@ -1,5 +1,14 @@
 # Agent Changelog: askpanel-web
 
+## 2026-10-05 — BL-028 SDK upgrade, proxy /account fix, memory reconciliation
+
+- BL-028: `@anthropic-ai/sdk` ^0.98.0 → ^0.131.0. Changelog 0.98–0.131 reviewed: no breaking changes to `messages.create` streaming, `tools`/`tool_choice`, or `cache_control`. tsc + build pass. Not verified against the live API (no key in this environment).
+- **New P0 (BL-030 / DA-005):** SDK 0.131 lists `claude-sonnet-4-5` — our `DEFAULT_MODEL` — as deprecated with end-of-life 2026-11-30. Left unchanged: replacement choice is a user decision.
+- BL-029 (firebase-admin 13→14, major): trial-installed 14.5.0, tsc + build pass with no code changes; reverted. Awaiting approval + confirmation the App Hosting runtime is Node ≥22.
+- `proxy.ts`: added `/account` to `PROTECTED` and `matcher` (missed in BL-023); replaced the stale "edge bundle" comment. Same wording fix in both repo-rules.md copies.
+- TD-002 resolved (merged duplicate imports in auth/session route).
+- Memory reconciliation: `.memory/BACKLOG.md` now mirrors the canonical root `BACKLOG.md`; RULES.md records the mirror rule, direct-to-main flow, RESUME.md non-durability, the two repo-rules copies, and corrected stack/business-model context (Next.js 16, 1–3 rounds, monthly free-run reset). Fixed remaining "Next.js 15" in MAP.md, CONVENTIONS.md, RULES.md, symbols/root-config.md.
+
 ## 2026-09-15 — BL-024–027: security fix + two bug fixes + doc corrections
 
 - BL-024: closed the SSRF DNS-rebinding gap in `app/api/context/extract` — resolves hostname via `dns.promises.lookup()` and checks every returned IP; switched to manual redirect handling (`redirect: 'manual'`) so each hop is independently re-validated before being followed (fetch's automatic redirect-following previously bypassed the hostname check entirely)

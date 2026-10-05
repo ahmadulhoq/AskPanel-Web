@@ -2,7 +2,7 @@
 > Last updated: 2026-09-14T00:00Z by Cartographer Agent
 
 ## Architecture Pattern
-- Pattern: Next.js 15 App Router — Server Components for data, Client Components pushed to the leaves (verified against current Next.js 15 best practice via web search, Sept 2026)
+- Pattern: Next.js 16 App Router — Server Components for data, Client Components pushed to the leaves (verified against current Next.js 16 best practice via web search, Sept 2026)
 - Auth: Firebase Auth (client SDK for sign-in) + session cookies verified via Firebase Admin SDK (server-side)
 - DB: Firestore (NoSQL document model) — Admin SDK only, no direct client-side Firestore access in app code
 - UI: Tailwind CSS v4 + shadcn/ui (built on `@base-ui/react` primitives + `class-variance-authority`)
