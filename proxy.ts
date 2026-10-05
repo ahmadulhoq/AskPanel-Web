@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { SESSION_COOKIE_NAME } from '@/lib/auth'
 
-// Routes requiring auth
-const PROTECTED = ['/dashboard', '/panel']
+// Keep in sync with config.matcher below.
+const PROTECTED = ['/dashboard', '/panel', '/account']
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -15,12 +15,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Lightweight check: verify cookie exists and is non-empty.
-  // Full signature verification happens in API routes and server components
-  // via firebase-admin (we avoid importing it in middleware to keep edge bundle small).
+  // Presence check only. Signature/expiry verification happens in server components
+  // and route handlers via getSessionUser(), which must still redirect on null.
   return NextResponse.next()
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/panel/:path*'],
+  matcher: ['/dashboard/:path*', '/panel/:path*', '/account/:path*'],
 }

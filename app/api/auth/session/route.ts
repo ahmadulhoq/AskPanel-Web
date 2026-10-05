@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createSessionCookie, SESSION_COOKIE_NAME, SESSION_DURATION_MS } from '@/lib/auth'
-import { adminDb } from '@/lib/firebase/admin'
-import { adminAuth } from '@/lib/firebase/admin'
+import { adminDb, adminAuth } from '@/lib/firebase/admin'
 import { FieldValue } from 'firebase-admin/firestore'
 
 export async function POST(request: NextRequest) {
