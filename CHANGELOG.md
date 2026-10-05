@@ -1,5 +1,12 @@
 # Agent Changelog: askpanel-web
 
+## 2026-10-05 — BL-030: model migration to claude-sonnet-5-5
+
+- User delegated the choice. Picked `claude-sonnet-5-5`: newest Sonnet in SDK 0.131, same tier/cost class as Sonnet 4.5, longest runway before deprecation, used in the SDK's own examples. No request-shape changes needed.
+- Retry route now resets `config.model` to `DEFAULT_MODEL` — panels pin their model at creation, so an old errored panel retried after 2026-11-30 would otherwise hit the retired model.
+- Updated the architecture doc's model references. Filed BL-031 (P1): post-deploy smoke test of every persona, since no live API call was possible here.
+- DA-005 resolved.
+
 ## 2026-10-05 — BL-028 SDK upgrade, proxy /account fix, memory reconciliation
 
 - BL-028: `@anthropic-ai/sdk` ^0.98.0 → ^0.131.0. Changelog 0.98–0.131 reviewed: no breaking changes to `messages.create` streaming, `tools`/`tool_choice`, or `cache_control`. tsc + build pass. Not verified against the live API (no key in this environment).

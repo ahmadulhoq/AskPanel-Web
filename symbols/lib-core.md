@@ -7,7 +7,7 @@
 | Name | File | Responsibility |
 |---|---|---|
 | `getAnthropicClient()` | anthropic.ts | Lazy singleton Anthropic SDK client |
-| `DEFAULT_MODEL` (const) | anthropic.ts | `'claude-sonnet-4-5'` — the model used across all three agents (Respondent/Critic/Synthesizer) and title generation |
+| `DEFAULT_MODEL` (const) | anthropic.ts | `'claude-sonnet-5-5'` (since 2026-10-05; was `claude-sonnet-4-5`, EOL 2026-11-30) — the model used across all three agents (Respondent/Critic/Synthesizer) and title generation |
 | `SESSION_COOKIE_NAME` (const) | auth.ts | `'__session'` — Firebase App Hosting convention, see SACRED S006 |
 | `SESSION_DURATION_MS` (const) | auth.ts | 14 days |
 | `createSessionCookie(idToken)` | auth.ts | Wraps `adminAuth().createSessionCookie()` |
