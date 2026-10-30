@@ -105,9 +105,14 @@ async function updateSynthesisField(
   await panelRef.update({ rounds })
 }
 
+export const MAX_ROUNDS = 3
+
 export async function* runPanel(input: OrchestratorInput): SSEGenerator {
   const { panelId, question, config, persona = 'general', context, customPersona } = input
-  const model = config.model ?? DEFAULT_MODEL
+  // Cost-sensitive values are never taken from the stored doc as-is: tier limits are
+  // enforced at creation, this is the backstop.
+  const model = DEFAULT_MODEL
+  const maxRounds = Math.min(Math.max(Math.trunc(config.maxRounds) || 2, 1), MAX_ROUNDS)
   const db = adminDb()
   const panelRef = db.collection('panels').doc(panelId)
 
@@ -118,7 +123,7 @@ export async function* runPanel(input: OrchestratorInput): SSEGenerator {
   let finalConfidence: ConfidenceLevel = 'medium'
 
   try {
-    for (let round = 1; round <= config.maxRounds; round++) {
+    for (let round = 1; round <= maxRounds; round++) {
       // ── Respondent ──────────────────────────────────────────────────
       const respondentPrompt = buildRespondentPrompt(question, history, persona, round === 1 ? context : undefined, customPersona)
       yield { type: 'agent_start', agent: 'respondent', round } satisfies SSEEvent
@@ -152,7 +157,7 @@ export async function* runPanel(input: OrchestratorInput): SSEGenerator {
       await updateRoundField(panelId, round, 'critic', criticContent)
 
       // ── Synthesizer ─────────────────────────────────────────────────
-      const isFinalRound = round === config.maxRounds
+      const isFinalRound = round === maxRounds
       const synthPrompt = buildSynthesizerPrompt(question, history, isFinalRound)
       yield { type: 'synthesis_start', round } satisfies SSEEvent
 
