@@ -1,5 +1,15 @@
 # Agent Changelog: askpanel-web
 
+## 2026-10-31 — BL-034, BL-036, BL-039, v2 M1 (chat), font fix
+
+- BL-034 (`2f4848f`): PanelInput submit callback was missing `persona`/`parentPanelId` deps → a persona picked after typing was ignored.
+- BL-036 (`350a1e3`): Stripe webhook now handles checkout.session.completed + customer.subscription.created/updated/deleted by re-reading the subscription from Stripe (order-proof); status→tier mapping tested (past_due keeps Pro as a grace period); uid stamped on subscriptions; existing customers reused; 409 on double checkout; /account shows scheduled cancellation and failed payment. Not exercised against Stripe (no keys) — `stripe trigger` test filed under BL-003.
+- BL-039 (`3868256`): Streamdown replaces react-markdown (removed, with remark-gfm). The `prose` classes had been no-ops (no typography plugin), so answers rendered unstyled. ThreadScroller (use-stick-to-bottom) on the panel page.
+- v2 M1 backend (`f776c78`): `lib/panels/create.ts` (shared creation; runner starts at creation; rounds clamp bug fixed), conversations + messages, quick-reply SSE from POST (detached generation), debate from message, Debate this, context builder (tested), reply cap 30/day (placeholder), titles, index.
+- v2 M1 UI (`3d42432`): /chat and /chat/[cid], ChatComposer, AssistantReply, DebateBlock, ConversationView; PanelThread `showFollowUp`/`onComplete`; ThreadScroller `followKey`; /chat protected in proxy.ts.
+- Font (`53c6258`): `--font-sans: var(--font-sans)` was self-referential → whole app rendered in the default serif. Now Geist.
+- Verification: 25 unit tests (`npm test`); browser e2e (13 checks) in Chromium against Firestore + Auth emulators with real login and a fake model API — panel streaming + scroll, markdown styling, chat reply, Debate this, Debate button, debate finishing after the user left, persistence, phone width, no console errors. Recipe in RULES.md.
+
 ## 2026-10-31 — M0: security lockdown + background debate runs; v2 spec
 
 - **Audit (2026-10-30)** found: client-writable Firestore rules (self-upgrade to Pro, reset run count, arbitrary model/rounds run at our cost); Next.js 16.2.6 critical RCE advisories; debates dying on client disconnect (verified: Next aborts the response stream → enqueue throws → generator torn down) and restarting from round 1 with duplicates and double billing on return; free-limit bypass (checked at creation, counted at completion); title generation cut off after the response.

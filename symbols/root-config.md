@@ -6,8 +6,8 @@
 
 | Name | File | Responsibility |
 |---|---|---|
-| `proxy(request)` | proxy.ts | Next.js 16 proxy (renamed from `middleware.ts`/`middleware`, exported as `proxy` — see SACRED-adjacent stack constraint in `.claude/rules/repo-rules.md`). Lightweight cookie-presence-only check on `/dashboard/*`, `/panel/*`, and `/account/*` (the last added 2026-10-05) — redirects to `/login` if the `__session` cookie is entirely absent. Does NOT verify the cookie's signature/validity (see SACRED S008 for why that's intentional and where the deeper check happens). |
-| `config.matcher` | proxy.ts | `['/dashboard/:path*', '/panel/:path*', '/account/:path*']` — the actual route-matching mechanism Next.js uses (the `PROTECTED` array inside the function body is a secondary, redundant-looking check against `pathname.startsWith()` — see finding below) |
+| `proxy(request)` | proxy.ts | Next.js 16 proxy (renamed from `middleware.ts`/`middleware`, exported as `proxy` — see SACRED-adjacent stack constraint in `.claude/rules/repo-rules.md`). Lightweight cookie-presence-only check on `/dashboard/*`, `/panel/*`, `/account/*` and `/chat/*` (account 2026-10-05, chat 2026-10-31) — redirects to `/login` if the `__session` cookie is entirely absent. Does NOT verify the cookie's signature/validity (see SACRED S008 for why that's intentional and where the deeper check happens). |
+| `config.matcher` | proxy.ts | `['/dashboard/:path*', '/panel/:path*', '/account/:path*', '/chat/:path*']` — the actual route-matching mechanism Next.js uses (the `PROTECTED` array inside the function body is a secondary, redundant-looking check against `pathname.startsWith()` — see finding below) |
 
 ## Notes / Findings
 - No FIXME/TODO/HACK comments found.

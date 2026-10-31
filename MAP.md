@@ -25,8 +25,11 @@
 | `app/api/auth/session/` | Session cookie lifecycle | `POST`/`DELETE /api/auth/session` |
 | `app/api/stripe/` | Checkout, billing portal, webhook | `POST create-checkout`, `POST portal`, `POST webhook` |
 | `app/api/user/persona/` | Custom persona CRUD | `PUT`/`DELETE /api/user/persona` |
-| `app/(app)/` | Auth-protected pages | dashboard, panel/[panelId], account |
+| `app/(app)/` | Auth-protected pages | dashboard, panel/[panelId], account, chat, chat/[cid] |
 | `components/account/` | Billing portal redirect | BillingPortalButton |
+| `lib/conversations/` | v2 conversation store, context, quick replies | `loadMessages()`, `toModelMessages()`, `debateContext()`, `streamReply()` |
+| `app/api/conversations/` | v2 conversation API | `POST /api/conversations`, `POST …/[cid]/messages`, `POST …/[cid]/debates` |
+| `app/(app)/chat/` + `components/chat/` | v2 chat UI (beta) | `ConversationView`, `DebateBlock`, `ChatComposer` |
 | `app/(auth)/` | Sign-in/sign-up page | login |
 | `app/p/[panelId]/` | Public share view (no auth) | — |
 | `app/` (root) | Root layout + landing page | — |
@@ -70,6 +73,13 @@
 - Runner dies (deploy, instance shutdown): its lease expires after 60s; the next view starts a new runner that resumes at the first missing step (verified: killed mid-critic → resumed at critic, respondent not re-run). The client resets the regenerated turn on the repeated `agent_start`.
 - A stale runner that wakes up after losing its lease gets `LeaseLostError` on its next write and exits without touching status.
 
+### Conversation (v2 M1, beta at /chat)
+- New: `/chat` composer → `POST /api/conversations` → `/chat/[cid]?q=…&mode=…` → page passes `pending` (only if empty) → `ConversationView` drops the params with `router.replace`, then sends
+- Quick reply (Enter): `POST …/messages {mode:'reply'}` → `reserveReply()` (free: 30/day) → user + streaming assistant message written → `toModelMessages(history)` → `streamReply()` streamed as SSE from the POST → saved on completion even if the client left
+- Debate (Debate button): `POST …/messages {mode:'debate'}` → `createPanel()` with `debateContext(history)` → runner starts immediately → assistant `kind:'debate'` message → `DebateBlock` renders `PanelThread` live
+- Debate this: `POST …/debates {messageId}` → debates the user message that reply answered, with the conversation before it as context
+- Later replies see finished debates as `[Panel verdict — …]` turns (read live from the panel docs by `loadMessages`)
+
 ### Custom Persona
 - Save: `CustomPersonaEditor` → `PUT /api/user/persona` (Pro-gated) → stored as `UserDoc.customPersona`
 - Use: `PersonaSelector` selects `persona: 'custom'` → `POST /api/panels` copies the CURRENT saved `customPersona` onto the new panel doc's `PanelDoc.customPersona` at creation time → orchestrator never re-reads the user doc, only the panel doc (self-contained panel docs pattern, CONVENTIONS.md)
@@ -84,8 +94,7 @@
 - Reserve: `reserveRun()` inside the creation (and retry) transaction: if the 30-day window passed, reset to 0 and advance `freeRunsResetAt`; then refuse at 5, else increment. Counting at creation closes the many-panels-before-any-completes bypass (verified: 12 concurrent → exactly 5)
 - Refund: `refundRun()` when a run errors (idempotent via `panel.runCounted`)
 - Paywall: 402 from `POST /api/panels` → `PaywallDialog` → `POST /api/stripe/create-checkout` → Stripe Checkout redirect
-- Upgrade: `checkout.session.completed` webhook → `tier: 'pro'` on user doc
-- Downgrade: `customer.subscription.deleted` webhook → `tier: 'free'`
+- Subscription sync: `checkout.session.completed` and `customer.subscription.created/updated/deleted` → webhook re-reads the subscription from Stripe → `subscriptionFields()` → tier (Pro for active/trialing/past_due), status, renewal date, cancelAtPeriodEnd. /account shows "Ends on" for scheduled cancellations and a failed-payment notice
 
 ## Technical Debt & Notes
 - See `.memory/TECH_DEBT.md` for the full registry. TD-001, TD-003, TD-004 (SSRF DNS-rebinding gap, FollowUpComposer isPublic hardcoded, unused-but-buggy shared Textarea) were fixed 2026-09-15 (BL-024/025/026) — see the Resolved section. TD-002 (minor import style in api-auth) remains open, low severity.

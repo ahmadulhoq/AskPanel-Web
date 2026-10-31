@@ -10,3 +10,7 @@
 | M0-S1 | Firestore lockdown, run-config clamp, Next.js 16.4.3, audit fix | 2026-10-30 | ~3h | 2026-10-30T00:00Z | 2026-10-30T00:00Z | ~25 min | 6 | completed |
 | M0-S2 | Background debate runner, lease/resume, stream diff, run accounting, tests, emulator e2e | 2026-10-31 | ~3d | 2026-10-30T00:00Z | 2026-10-31T00:00Z | ~2.5h | 16 | completed |
 | V2-SPEC | v2 conversational spec + plugin evaluation | 2026-10-31 | ~1d | 2026-10-30T00:00Z | 2026-10-31T00:00Z | ~30 min | 1 | completed |
+| BL-034 | Stale persona in composer | 2026-10-31 | ~0.5h | 2026-10-31T00:00Z | 2026-10-31T00:00Z | ~3 min | 1 | completed |
+| BL-036 | Stripe subscription sync + account states | 2026-10-31 | ~1d | 2026-10-31T00:00Z | 2026-10-31T00:00Z | ~20 min | 7 | completed |
+| BL-039 | Streamdown + stick-to-bottom | 2026-10-31 | ~0.5d | 2026-10-31T00:00Z | 2026-10-31T00:00Z | ~20 min | 8 | completed |
+| BL-041 | v2 M1 conversations (backend + UI) + browser e2e + font fix | 2026-10-31 | ~2w | 2026-10-31T00:00Z | 2026-10-31T00:00Z | ~3h | 30 | completed |
