@@ -72,7 +72,7 @@ export function PanelInput({ question, onQuestionChange, isPublic, onIsPublicCha
     } finally {
       setLoading(false)
     }
-  }, [question, isPublic, loading, router, userContext, maxRounds])
+  }, [question, isPublic, persona, parentPanelId, loading, router, userContext, maxRounds])
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
