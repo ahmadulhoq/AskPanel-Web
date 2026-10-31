@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { Streamdown } from 'streamdown'
 import { Check, Copy, Download } from 'lucide-react'
 import { ConfidenceBadge } from './ConfidenceBadge'
 import type { ConfidenceLevel } from '@/types'
@@ -64,9 +63,7 @@ export function FinalAnswer({ answer, confidence, panelId }: Props) {
               </button>
             </div>
           </div>
-          <div className="prose prose-sm dark:prose-invert max-w-none">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{answer}</ReactMarkdown>
-          </div>
+          <Streamdown className="text-sm leading-relaxed">{answer}</Streamdown>
         </div>
       </div>
     </div>

@@ -1,5 +1,4 @@
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { Streamdown } from 'streamdown'
 import type { AgentTurnState } from '@/types'
 
 const AGENT_META = {
@@ -44,9 +43,9 @@ export function AgentTurn({ turn, issuesFound }: Props) {
             </span>
           )}
         </div>
-        <div className="prose prose-sm dark:prose-invert max-w-none">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{turn.content}</ReactMarkdown>
-        </div>
+        <Streamdown className="text-sm leading-relaxed" isAnimating={turn.streaming}>
+          {turn.content}
+        </Streamdown>
       </div>
     </div>
   )

@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
 import { usePanel } from '@/hooks/usePanel'
 import { AgentTurn } from './AgentTurn'
 import { SynthesisCard } from './SynthesisCard'
@@ -16,11 +15,6 @@ interface Props {
 
 export function PanelThread({ panelId, persona = 'general', isPublic = true }: Props) {
   const state = usePanel(panelId)
-  const bottomRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [state.turns, state.syntheses, state.finalAnswer])
 
   if (state.status === 'idle') {
     return <PanelSkeleton />
@@ -84,7 +78,6 @@ export function PanelThread({ panelId, persona = 'general', isPublic = true }: P
         </div>
       )}
 
-      <div ref={bottomRef} />
     </div>
   )
 }
