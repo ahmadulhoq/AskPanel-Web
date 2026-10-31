@@ -3,6 +3,7 @@ import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
 import { DEFAULT_MODEL } from '@/lib/anthropic'
 import { reserveRun, FreeLimitReachedError } from '@/lib/billing/runs'
+import { runPanelJob } from '@/lib/agents/runner'
 
 class RetryRejected extends Error {
   constructor(readonly status: number, message: string) {
@@ -35,7 +36,7 @@ export async function POST(
       // The failed run was refunded, so a retry counts as a new run.
       const { counted } = await reserveRun(tx, userRef, Date.now())
 
-      // Start over: the stream route starts a fresh runner when the client reconnects.
+      // Start over from round 1.
       tx.update(panelRef, {
         status: 'queued',
         errorMessage: null,
@@ -62,5 +63,6 @@ export async function POST(
     throw err
   }
 
+  runPanelJob(panelId).catch((err) => console.error('[retry] runner crashed', panelId, err))
   return NextResponse.json({ ok: true })
 }
