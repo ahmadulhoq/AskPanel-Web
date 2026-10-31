@@ -34,6 +34,8 @@ export default async function AccountPage() {
   const resetDate = formatDate(userData?.freeRunsResetAt)
   const renewalDate = formatDate(userData?.subscription?.currentPeriodEnd)
   const hasStripeCustomer = Boolean(userData?.subscription?.stripeCustomerId)
+  const cancelAtPeriodEnd = userData?.subscription?.cancelAtPeriodEnd === true
+  const paymentFailed = userData?.subscription?.status === 'past_due'
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
@@ -70,8 +72,17 @@ export default async function AccountPage() {
             <div className="rounded-lg border bg-muted/30 p-4 text-sm">
               <p className="font-medium">Unlimited panel runs</p>
               {renewalDate && (
-                <p className="mt-1 text-muted-foreground">Renews on {renewalDate}</p>
+                <p className="mt-1 text-muted-foreground">
+                  {cancelAtPeriodEnd ? `Ends on ${renewalDate} — it won't renew` : `Renews on ${renewalDate}`}
+                </p>
               )}
+            </div>
+          )}
+
+          {paymentFailed && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+              Your last payment didn&apos;t go through. Stripe will retry it — update your payment
+              method to keep Pro.
             </div>
           )}
 

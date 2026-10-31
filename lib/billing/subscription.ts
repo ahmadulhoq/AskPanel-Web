@@ -1,0 +1,41 @@
+// The subset of a Stripe Subscription we read. In this API version the billing period
+// lives on the subscription items, not the subscription.
+export interface StripeSubscriptionLike {
+  id: string
+  customer: string | { id: string }
+  status: 'active' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'past_due' | 'paused' | 'trialing' | 'unpaid'
+  cancel_at_period_end: boolean
+  items: { data: { current_period_end: number }[] }
+}
+
+export interface SubscriptionFields {
+  tier: 'free' | 'pro'
+  status: StripeSubscriptionLike['status']
+  subscriptionId: string
+  customerId: string
+  currentPeriodEndMs: number | null
+  cancelAtPeriodEnd: boolean
+}
+
+// past_due keeps access while Stripe retries the payment; once retries are exhausted,
+// Stripe moves the subscription to canceled or unpaid (per the account's billing settings).
+const PRO_STATUSES = new Set<SubscriptionFields['status']>(['active', 'trialing', 'past_due'])
+
+export function subscriptionFields(sub: StripeSubscriptionLike): SubscriptionFields {
+  const periodEnd = sub.items.data[0]?.current_period_end
+  return {
+    tier: PRO_STATUSES.has(sub.status) ? 'pro' : 'free',
+    status: sub.status,
+    subscriptionId: sub.id,
+    customerId: typeof sub.customer === 'string' ? sub.customer : sub.customer.id,
+    currentPeriodEndMs: periodEnd ? periodEnd * 1000 : null,
+    cancelAtPeriodEnd: sub.cancel_at_period_end,
+  }
+}
+
+// Stripe doesn't guarantee event order: a late event about a user's previous subscription
+// must not override the one they have now. A new paying subscription always wins.
+export function shouldApply(currentSubscriptionId: string | null, incoming: SubscriptionFields): boolean {
+  if (!currentSubscriptionId || currentSubscriptionId === incoming.subscriptionId) return true
+  return incoming.tier === 'pro'
+}

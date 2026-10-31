@@ -17,6 +17,9 @@ export interface UserSubscription {
   stripeCustomerId: string | null
   stripeSubscriptionId: string | null
   currentPeriodEnd: Timestamp | null
+  // Synced from Stripe by the webhook; absent on users who never subscribed.
+  status?: 'active' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'past_due' | 'paused' | 'trialing' | 'unpaid' | null
+  cancelAtPeriodEnd?: boolean
 }
 
 export interface UserDoc {
