@@ -79,6 +79,11 @@ export default async function DashboardPage({
           ) : (
             <Badge variant="default">Pro</Badge>
           )}
+          <Link href="/chat">
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+              Chat <span className="ml-1 rounded bg-primary/10 px-1 py-0.5 text-[10px] font-semibold text-primary">BETA</span>
+            </Button>
+          </Link>
           <Link href="/account">
             <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
               Account

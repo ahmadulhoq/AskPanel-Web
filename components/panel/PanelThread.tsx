@@ -1,20 +1,34 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import { usePanel } from '@/hooks/usePanel'
 import { AgentTurn } from './AgentTurn'
 import { SynthesisCard } from './SynthesisCard'
 import { FinalAnswer } from './FinalAnswer'
 import { FollowUpComposer } from './FollowUpComposer'
 import { RetryButton } from './RetryButton'
+import type { ConfidenceLevel } from '@/types'
 
 interface Props {
   panelId: string
   persona?: string
   isPublic?: boolean
+  // Inside a conversation the chat input replaces the follow-up box.
+  showFollowUp?: boolean
+  onComplete?: (finalAnswer: string, confidence: ConfidenceLevel) => void
 }
 
-export function PanelThread({ panelId, persona = 'general', isPublic = true }: Props) {
+export function PanelThread({ panelId, persona = 'general', isPublic = true, showFollowUp = true, onComplete }: Props) {
   const state = usePanel(panelId)
+
+  // Report completion once, even if the parent passes a new callback on every render.
+  const reported = useRef(false)
+  useEffect(() => {
+    if (state.status === 'complete' && state.finalAnswer && state.confidence && !reported.current) {
+      reported.current = true
+      onComplete?.(state.finalAnswer, state.confidence)
+    }
+  }, [state.status, state.finalAnswer, state.confidence, onComplete])
 
   if (state.status === 'idle') {
     return <PanelSkeleton />
@@ -65,7 +79,9 @@ export function PanelThread({ panelId, persona = 'general', isPublic = true }: P
       {state.status === 'complete' && state.finalAnswer && state.confidence && (
         <>
           <FinalAnswer answer={state.finalAnswer} confidence={state.confidence} panelId={panelId} />
-          <FollowUpComposer parentPanelId={panelId} parentPersona={persona} parentIsPublic={isPublic} />
+          {showFollowUp && (
+            <FollowUpComposer parentPanelId={panelId} parentPersona={persona} parentIsPublic={isPublic} />
+          )}
         </>
       )}
 

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { SESSION_COOKIE_NAME } from '@/lib/auth'
 
 // Keep in sync with config.matcher below.
-const PROTECTED = ['/dashboard', '/panel', '/account']
+const PROTECTED = ['/dashboard', '/panel', '/account', '/chat']
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -21,5 +21,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/panel/:path*', '/account/:path*'],
+  matcher: ['/dashboard/:path*', '/panel/:path*', '/account/:path*', '/chat/:path*'],
 }
