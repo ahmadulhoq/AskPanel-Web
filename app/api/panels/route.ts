@@ -2,12 +2,10 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
 import { nanoid } from 'nanoid'
-import { FieldValue, Timestamp } from 'firebase-admin/firestore'
+import { FieldValue } from 'firebase-admin/firestore'
 import { DEFAULT_MODEL } from '@/lib/anthropic'
 import { PERSONA_MAP } from '@/lib/agents/personas'
-
-const FREE_RUN_LIMIT = 5
-const RESET_INTERVAL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
+import { reserveRun, FreeLimitReachedError } from '@/lib/billing/runs'
 
 export async function POST(request: NextRequest) {
   const user = await getSessionUser()
@@ -71,25 +69,7 @@ export async function POST(request: NextRequest) {
 
   try {
     await db.runTransaction(async (tx) => {
-      const userSnap = await tx.get(userRef)
-      const userData = userSnap.data()
-
-      const tier = userData?.subscription?.tier ?? 'free'
-      let freeRunsUsed = userData?.freeRunsUsed ?? 0
-      const resetAt = userData?.freeRunsResetAt?.toMillis() ?? 0
-
-      // Monthly reset: if the reset window has passed, zero out the counter.
-      if (tier !== 'pro' && (resetAt === 0 || now >= resetAt)) {
-        freeRunsUsed = 0
-        tx.update(userRef, {
-          freeRunsUsed: 0,
-          freeRunsResetAt: Timestamp.fromMillis(now + RESET_INTERVAL_MS),
-        })
-      }
-
-      if (tier !== 'pro' && freeRunsUsed >= FREE_RUN_LIMIT) {
-        throw new Error('FREE_LIMIT_REACHED')
-      }
+      const { tier, counted, userData } = await reserveRun(tx, userRef, now)
 
       // Validate maxRounds: free → max 2, pro → max 3.
       const maxRoundsLimit = tier === 'pro' ? 3 : 2
@@ -128,10 +108,11 @@ export async function POST(request: NextRequest) {
         finalAnswer: null,
         confidence: null,
         errorMessage: null,
+        runCounted: counted,
       })
     })
   } catch (err) {
-    if (err instanceof Error && err.message === 'FREE_LIMIT_REACHED') {
+    if (err instanceof FreeLimitReachedError) {
       return NextResponse.json({ error: 'FREE_LIMIT_REACHED' }, { status: 402 })
     }
     throw err

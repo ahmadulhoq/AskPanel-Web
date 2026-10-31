@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useReducer, useRef } from 'react'
+import { useEffect, useReducer } from 'react'
 import type { SSEEvent, PanelState, AgentTurnState, SynthesisState } from '@/types'
 
 type Action = SSEEvent | { type: 'reset' }
+
+const MAX_RECONNECTS = 5
 
 function reducer(state: PanelState, action: Action): PanelState {
   if (action.type === 'reset') {
@@ -18,7 +20,14 @@ function reducer(state: PanelState, action: Action): PanelState {
         content: '',
         streaming: true,
       }
-      return { ...state, status: 'running', turns: [...state.turns, turn] }
+      // A resumed run regenerates an unfinished turn; replace it rather than duplicating it.
+      const existing = state.turns.findIndex(
+        (t) => t.agent === action.agent && t.round === action.round && t.streaming,
+      )
+      const turns = existing === -1
+        ? [...state.turns, turn]
+        : state.turns.map((t, i) => (i === existing ? turn : t))
+      return { ...state, status: 'running', turns }
     }
 
     case 'agent_token': {
@@ -80,35 +89,60 @@ function initialState(): PanelState {
 
 export function usePanel(panelId: string | null) {
   const [state, dispatch] = useReducer(reducer, undefined, initialState)
-  const esRef = useRef<EventSource | null>(null)
 
   useEffect(() => {
     if (!panelId) return
 
-    dispatch({ type: 'reset' })
+    let es: EventSource | null = null
+    let retryTimer: ReturnType<typeof setTimeout> | undefined
+    let attempts = 0
+    let finished = false
 
-    const es = new EventSource(`/api/panels/${panelId}/stream`)
-    esRef.current = es
+    // The debate runs on the server regardless of this connection, and every connection
+    // replays the full stored state — so a dropped connection is simply reopened.
+    const connect = () => {
+      let fresh = true
+      es = new EventSource(`/api/panels/${panelId}/stream`)
 
-    es.onmessage = (e) => {
-      try {
-        const event = JSON.parse(e.data) as SSEEvent
+      es.onmessage = (e) => {
+        let event: SSEEvent
+        try {
+          event = JSON.parse(e.data) as SSEEvent
+        } catch {
+          return // malformed event — ignore
+        }
+        // Reset on the first event of a connection (not on connect) so the thread
+        // doesn't flash empty while reconnecting.
+        if (fresh) {
+          dispatch({ type: 'reset' })
+          fresh = false
+        }
+        attempts = 0
         dispatch(event)
         if (event.type === 'panel_complete' || event.type === 'error') {
-          es.close()
+          finished = true
+          es?.close()
         }
-      } catch {
-        // malformed event — ignore
+      }
+
+      es.onerror = () => {
+        es?.close()
+        if (finished) return
+        if (attempts >= MAX_RECONNECTS) {
+          dispatch({ type: 'error', message: 'Connection lost. Please refresh.' })
+          return
+        }
+        attempts++
+        retryTimer = setTimeout(connect, Math.min(1000 * 2 ** attempts, 15_000))
       }
     }
 
-    es.onerror = () => {
-      dispatch({ type: 'error', message: 'Connection lost. Please refresh.' })
-      es.close()
-    }
+    connect()
 
     return () => {
-      es.close()
+      finished = true
+      clearTimeout(retryTimer)
+      es?.close()
     }
   }, [panelId])
 

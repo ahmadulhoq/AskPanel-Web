@@ -66,6 +66,24 @@ export interface PanelDoc {
   finalAnswer: string | null
   confidence: ConfidenceLevel | null
   errorMessage: string | null
+  // Background run state (absent on panels created before background runs).
+  live?: LiveTurn | null
+  run?: RunLease | null
+  runCounted?: boolean
+}
+
+// In-progress agent text, flushed by the runner about once a second.
+export interface LiveTurn {
+  agent: AgentRole
+  round: number
+  content: string
+  runId: string
+}
+
+// Only the runner holding the current lease may write a panel's progress.
+export interface RunLease {
+  id: string
+  heartbeatAt: number
 }
 
 // SSE event types

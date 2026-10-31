@@ -7,7 +7,8 @@ import {
   buildSynthesizerPrompt,
   SYNTHESIZER_TOOL,
 } from './prompts'
-import type { ConversationTurn, OrchestratorInput, SSEGenerator } from './types'
+import type { OrchestratorInput, SSEGenerator } from './types'
+import { resumePoint, historyBefore } from './runState'
 import type { SSEEvent, ConfidenceLevel, SynthesisDecision } from '@/types'
 import { FieldValue } from 'firebase-admin/firestore'
 
@@ -62,99 +63,96 @@ async function callSynthesizer(
   return input
 }
 
-async function updateRoundField(
-  panelId: string,
-  round: number,
-  role: 'respondent' | 'critic',
-  content: string,
-) {
-  const db = adminDb()
-  const panelRef = db.collection('panels').doc(panelId)
-  const snap = await panelRef.get()
-  const data = snap.data()
-  const rounds: Record<string, unknown>[] = data?.rounds ?? []
-
-  const idx = rounds.findIndex((r) => r.roundNumber === round)
-  if (idx === -1) {
-    rounds.push({ roundNumber: round, respondent: null, critic: null, synthesizer: null, [role]: { content } })
-  } else {
-    rounds[idx] = { ...rounds[idx], [role]: { content } }
+export class LeaseLostError extends Error {
+  constructor() {
+    super('Another runner now holds this panel')
   }
-
-  await panelRef.update({ rounds })
 }
 
-async function updateSynthesisField(
+type PanelData = { rounds?: Record<string, unknown>[]; run?: { id?: string } | null }
+
+// Read-modify-write in a transaction, refused if another runner has taken over the panel.
+async function leasedUpdate(
   panelId: string,
-  round: number,
-  synthesis: { decision: SynthesisDecision; confidence: ConfidenceLevel; reasoning: string; issuesFound: number },
+  leaseId: string | undefined,
+  build: (data: PanelData) => Record<string, unknown>,
 ) {
   const db = adminDb()
-  const panelRef = db.collection('panels').doc(panelId)
-  const snap = await panelRef.get()
-  const data = snap.data()
-  const rounds: Record<string, unknown>[] = data?.rounds ?? []
+  const ref = db.collection('panels').doc(panelId)
+  await db.runTransaction(async (tx) => {
+    const data = ((await tx.get(ref)).data() ?? {}) as PanelData
+    if (leaseId && data.run?.id !== leaseId) throw new LeaseLostError()
+    tx.update(ref, build(data))
+  })
+}
 
+function withRound(data: PanelData, round: number, patch: Record<string, unknown>) {
+  const rounds = [...(data.rounds ?? [])]
   const idx = rounds.findIndex((r) => r.roundNumber === round)
   if (idx === -1) {
-    rounds.push({ roundNumber: round, respondent: null, critic: null, synthesizer: synthesis })
+    rounds.push({ roundNumber: round, respondent: null, critic: null, synthesizer: null, ...patch })
   } else {
-    rounds[idx] = { ...rounds[idx], synthesizer: synthesis }
+    rounds[idx] = { ...rounds[idx], ...patch }
   }
-
-  await panelRef.update({ rounds })
+  return { rounds }
 }
 
 export const MAX_ROUNDS = 3
 
 export async function* runPanel(input: OrchestratorInput): SSEGenerator {
-  const { panelId, question, config, persona = 'general', context, customPersona } = input
+  const { panelId, question, config, persona = 'general', context, customPersona, rounds: stored = [], leaseId } = input
   // Cost-sensitive values are never taken from the stored doc as-is: tier limits are
   // enforced at creation, this is the backstop.
   const model = DEFAULT_MODEL
   const maxRounds = Math.min(Math.max(Math.trunc(config.maxRounds) || 2, 1), MAX_ROUNDS)
-  const db = adminDb()
-  const panelRef = db.collection('panels').doc(panelId)
 
-  await panelRef.update({ status: 'running' })
-
-  const history: ConversationTurn[] = []
+  // Resume after the last completed step, so an interrupted run never repeats work.
+  const start = resumePoint(stored, maxRounds)
+  const history = historyBefore(stored, start)
   let finalAnswer = ''
   let finalConfidence: ConfidenceLevel = 'medium'
 
   try {
-    for (let round = 1; round <= maxRounds; round++) {
+    await leasedUpdate(panelId, leaseId, () => ({ status: 'running', 'config.model': model }))
+
+    for (let round = start.round; round <= maxRounds; round++) {
+      const resuming = round === start.round
+
       // ── Respondent ──────────────────────────────────────────────────
-      const respondentPrompt = buildRespondentPrompt(question, history, persona, round === 1 ? context : undefined, customPersona)
-      yield { type: 'agent_start', agent: 'respondent', round } satisfies SSEEvent
+      if (!resuming || start.step === 'respondent') {
+        const respondentPrompt = buildRespondentPrompt(question, history, persona, round === 1 ? context : undefined, customPersona)
+        yield { type: 'agent_start', agent: 'respondent', round } satisfies SSEEvent
 
-      let respondentContent = ''
-      for await (const chunk of streamAgent('respondent', respondentPrompt, model)) {
-        if (chunk.token) {
-          yield { type: 'agent_token', agent: 'respondent', token: chunk.token } satisfies SSEEvent
+        let respondentContent = ''
+        for await (const chunk of streamAgent('respondent', respondentPrompt, model)) {
+          if (chunk.token) {
+            yield { type: 'agent_token', agent: 'respondent', token: chunk.token } satisfies SSEEvent
+          }
+          respondentContent = chunk.full
         }
-        respondentContent = chunk.full
-      }
 
-      yield { type: 'agent_complete', agent: 'respondent', round, content: respondentContent } satisfies SSEEvent
-      history.push({ role: 'respondent', content: respondentContent, round })
-      await updateRoundField(panelId, round, 'respondent', respondentContent)
+        yield { type: 'agent_complete', agent: 'respondent', round, content: respondentContent } satisfies SSEEvent
+        history.push({ role: 'respondent', content: respondentContent, round })
+        await leasedUpdate(panelId, leaseId, (d) => withRound(d, round, { respondent: { content: respondentContent } }))
+      }
 
       // ── Critic ──────────────────────────────────────────────────────
-      const criticPrompt = buildCriticPrompt(question, history, persona, customPersona)
-      yield { type: 'agent_start', agent: 'critic', round } satisfies SSEEvent
+      if (!resuming || start.step !== 'synthesizer') {
+        const criticPrompt = buildCriticPrompt(question, history, persona, customPersona)
+        yield { type: 'agent_start', agent: 'critic', round } satisfies SSEEvent
 
-      let criticContent = ''
-      for await (const chunk of streamAgent('critic', criticPrompt, model)) {
-        if (chunk.token) {
-          yield { type: 'agent_token', agent: 'critic', token: chunk.token } satisfies SSEEvent
+        let criticContent = ''
+        for await (const chunk of streamAgent('critic', criticPrompt, model)) {
+          if (chunk.token) {
+            yield { type: 'agent_token', agent: 'critic', token: chunk.token } satisfies SSEEvent
+          }
+          criticContent = chunk.full
         }
-        criticContent = chunk.full
-      }
 
-      yield { type: 'agent_complete', agent: 'critic', round, content: criticContent } satisfies SSEEvent
-      history.push({ role: 'critic', content: criticContent, round })
-      await updateRoundField(panelId, round, 'critic', criticContent)
+        yield { type: 'agent_complete', agent: 'critic', round, content: criticContent } satisfies SSEEvent
+        history.push({ role: 'critic', content: criticContent, round })
+        await leasedUpdate(panelId, leaseId, (d) => withRound(d, round, { critic: { content: criticContent } }))
+      }
 
       // ── Synthesizer ─────────────────────────────────────────────────
       const isFinalRound = round === maxRounds
@@ -172,21 +170,15 @@ export async function* runPanel(input: OrchestratorInput): SSEGenerator {
       }
 
       history.push({ role: 'synthesizer', content: synthesis.reasoning, round })
-      await updateSynthesisField(panelId, round, {
+      const result = {
         decision: synthesis.decision,
         confidence: synthesis.confidence,
         reasoning: synthesis.reasoning,
         issuesFound: synthesis.issuesFound ?? 0,
-      })
+      }
+      await leasedUpdate(panelId, leaseId, (d) => withRound(d, round, { synthesizer: result }))
 
-      yield {
-        type: 'synthesis_result',
-        round,
-        decision: synthesis.decision,
-        confidence: synthesis.confidence,
-        reasoning: synthesis.reasoning,
-        issuesFound: synthesis.issuesFound ?? 0,
-      } satisfies SSEEvent
+      yield { type: 'synthesis_result', round, ...result } satisfies SSEEvent
 
       finalAnswer = synthesis.finalAnswer
       finalConfidence = synthesis.confidence
@@ -194,17 +186,19 @@ export async function* runPanel(input: OrchestratorInput): SSEGenerator {
       if (synthesis.decision !== 'continue') break
     }
 
-    await panelRef.update({
+    await leasedUpdate(panelId, leaseId, () => ({
       status: 'complete',
       finalAnswer,
       confidence: finalConfidence,
       completedAt: FieldValue.serverTimestamp(),
-    })
+    }))
 
     yield { type: 'panel_complete', finalAnswer, confidence: finalConfidence } satisfies SSEEvent
   } catch (err) {
+    // Another runner took over; it owns the panel's status from here.
+    if (err instanceof LeaseLostError) return
     const message = err instanceof Error ? err.message : 'Unknown error'
-    await panelRef.update({ status: 'error', errorMessage: message })
+    await leasedUpdate(panelId, leaseId, () => ({ status: 'error', errorMessage: message })).catch(() => {})
     yield { type: 'error', message } satisfies SSEEvent
   }
 }
