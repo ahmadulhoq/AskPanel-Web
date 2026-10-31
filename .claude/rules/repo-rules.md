@@ -13,6 +13,7 @@
 - The `isFinalRound` hard-guard in `orchestrator.ts` must never be removed — it prevents infinite loops when Synthesizer returns 'continue' on the last round
 - Prompt caching (`cache_control: ephemeral`) on system prompts is intentional and cost-critical — do not remove
 - Synthesizer uses `tool_use` (not streaming) — changing this breaks the structured output contract
+- Debates run only through `runPanelJob()` (`lib/agents/runner.ts`), detached from any request, holding a lease on the panel doc. Never run the orchestrator inside a response stream again — a client disconnect aborts it. Stream routes only watch Firestore
 
 ## Auth Rules
 - Session cookie name is `__session` (Firebase App Hosting convention)
@@ -20,4 +21,5 @@
 
 ## Firestore
 - The composite index `panels: userId ASC + createdAt DESC` must exist before the dashboard query runs
-- Free-run limit enforcement uses a Firestore transaction — never replace with a simple read+write
+- Free runs are reserved inside the limit transaction at creation (`reserveRun`) and refunded on failure (`refundRun`) — never count on completion, never replace with a simple read+write
+- `firestore.rules` deny all client access: the browser never talks to Firestore. Don't add client Firestore calls or loosen the rules
