@@ -1,10 +1,10 @@
 # Project Map: askpanel-web
-> Last updated: 2026-09-14T00:00Z by Cartographer Agent
+> Last updated: 2026-10-31 (background runs, billing, rules lockdown)
 
 ## Architecture Pattern
 - Pattern: Next.js 16 App Router — Server Components for data, Client Components pushed to the leaves (verified against current Next.js 16 best practice via web search, Sept 2026)
 - Auth: Firebase Auth (client SDK for sign-in) + session cookies verified via Firebase Admin SDK (server-side)
-- DB: Firestore (NoSQL document model) — Admin SDK only, no direct client-side Firestore access in app code
+- DB: Firestore (NoSQL document model) — Admin SDK only. `firestore.rules` deny all client access (2026-10-31); the browser must never talk to Firestore
 - UI: Tailwind CSS v4 + shadcn/ui (built on `@base-ui/react` primitives + `class-variance-authority`)
 - Navigation: Next.js App Router file-based routing, incl. route groups `(app)` (protected) and `(auth)` (public)
 - Serialization boundary: server components map Firestore documents (which carry `Timestamp` objects) to plain serializable types before passing props to client components — see CONVENTIONS.md
@@ -12,10 +12,12 @@
 ## Module Registry
 | Module | Responsibility | Key Entry Points |
 |--------|---------------|-----------------|
-| `lib/agents/` | Multi-agent orchestration loop — the core IP | `runPanel()` in orchestrator.ts |
-| `lib/firebase/` | Firebase client + admin SDK init (lazy) | `getFirebaseAuth()`, `getFirebaseDb()`, `adminAuth()`, `adminDb()` |
+| `lib/agents/` | Multi-agent orchestration loop — the core IP — and its background runner | `runPanelJob()` in runner.ts → `runPanel()` in orchestrator.ts |
+| `lib/firebase/` | Firebase client (Auth only) + admin SDK init (lazy) | `getFirebaseAuth()`, `adminAuth()`, `adminDb()` |
 | `lib/anthropic.ts` | Anthropic SDK client (lazy) | `getAnthropicClient()`, `DEFAULT_MODEL` |
 | `lib/stripe.ts` | Stripe client (lazy) | `getStripe()` |
+| `lib/billing/` | Free-run accounting | `reserveRun()`, `refundRun()` |
+| `lib/panels/` | Stored panel state → SSE events | `diffPanel()` |
 | `lib/auth.ts` | Session cookie helpers | `getSessionUser()`, `createSessionCookie()`, `verifySessionCookie()` |
 | `lib/utils.ts` | className merge helper | `cn()` |
 | `app/api/panels/` | Panel creation, SSE stream, export, retry | `POST /api/panels`, `GET .../stream`, `GET .../export`, `POST .../retry` |
@@ -39,7 +41,8 @@
 ## Internal Frameworks / Shared Libraries
 | Framework | Responsibility | Used By |
 |-----------|---------------|---------|
-| SSE streaming | Real-time agent token delivery + reconnection replay | PanelThread → usePanel → GET stream → `replayRounds()` |
+| SSE streaming | Live debate delivery: Firestore snapshots → `diffPanel()` → SSE; client reconnects and replays | PanelThread → usePanel → GET stream → onSnapshot |
+| Run lease | One runner per panel; lease-checked writes; resume after crash | runner.ts, orchestrator.ts `leasedUpdate` |
 | Firestore transactions | Atomic free-run limit + monthly reset enforcement | POST /api/panels |
 | Prompt caching | `cache_control: ephemeral` on system prompts | orchestrator.ts (SACRED S003) |
 | Lazy singleton clients | Prevents SSR/build-time crashes from missing env vars | lib/anthropic.ts, lib/stripe.ts, lib/firebase/* (SACRED S005) |
@@ -47,22 +50,25 @@
 
 ## Critical Business Logic Flows
 
-### Panel Run (new panel)
+### Panel Run (new panel) — background job since 2026-10-31
 - Entry: `QuestionComposer` → `PanelInput.tsx` → `POST /api/panels` → `{ panelId }` → `router.push('/panel/[panelId]')`
-- Creation: transaction reads user doc → applies monthly free-run reset if due → enforces 5-run free limit (402 if exceeded) → validates `maxRounds` per tier → resolves `customPersona` if `persona === 'custom'` → `tx.set()` panel doc with `status: 'queued'` (SACRED S007 — doc exists before stream ever opens)
-- Stream: `usePanel` opens `GET /api/panels/[panelId]/stream` (EventSource)
-- Orchestration: `runPanel()` → Respondent (stream) → Critic (stream) → Synthesizer (`tool_use`, SACRED S002) → repeat up to `config.maxRounds` (1–3, tier-validated)
+- Creation: one transaction: `reserveRun()` (monthly reset → 5-run free limit → **counts the run**; 402 at limit) → clamp `maxRounds` by tier → copy custom persona → `tx.set()` panel with `status: 'queued'`, `runCounted` (SACRED S007 — doc exists before any stream opens)
+- Start: `usePanel` opens `GET /api/panels/[panelId]/stream`; the route calls `runPanelJob(panelId)` detached — a no-op if a runner already holds a live lease
+- Run: `runPanelJob` takes the lease (60s TTL, 15s heartbeat) → `runPanel()` resumes after the last stored step → Respondent (stream) → Critic (stream) → Synthesizer (`tool_use`, SACRED S002) → repeat up to clamped max rounds; every write is a lease-checked transaction (`leasedUpdate`); in-progress text flushed to `panel.live` ≤1/s
+- Viewing: the stream route tails the doc with `onSnapshot` → `diffPanel()` → SSE events. Viewers never affect the run; any number can watch
 - Termination: Synthesizer decision ≠ `'continue'`, or `isFinalRound` forces `'contested'` (SACRED S001)
-- Persistence: each agent turn written to Firestore `rounds[]` array as it completes; `status`/`finalAnswer`/`confidence` updated on complete
-- Post-complete: `freeRunsUsed` incremented for non-pro users; `generatePanelTitle()` fired (not awaited)
+- Post-complete (in the runner): `generatePanelTitle()` awaited; lease + live cleared. On error: `refundRun()`
+- Hosting: `apphosting.yaml` `cpuAlwaysAllocated: true` keeps CPU for runs after the starting request ends; without it, runs stall while unwatched and resume on the next view
 
 ### Follow-up Panel
 - Entry: `FollowUpComposer` (rendered after `FinalAnswer` on a completed panel) → `POST /api/panels` with `parentPanelId` + inherited `persona` + inherited `isPublic` (`panel.isPublic` threaded down from `PanelPage`, fixed 2026-09-15 BL-025 — see TECH_DEBT.md Resolved TD-003)
 - Context injection: parent panel's `finalAnswer` is fetched (ownership-checked, outside the transaction) and merged with any user-provided context, stored as `context` on the new panel doc, injected into the Respondent's round-1 prompt only
 
-### SSE Reconnection / Page Refresh Mid-Run
-- `GET /api/panels/[panelId]/stream` always calls `replayRounds(panelData.rounds ?? [])` first — converts already-persisted rounds back into synthetic SSE events — before either (a) emitting `panel_complete` immediately (if `status === 'complete'`) or (b) continuing with the live `runPanel()` generator (if still queued/running)
-- This means a client that disconnects and reconnects mid-run sees the full thread reconstructed from Firestore, then picks up live events from wherever the orchestrator actually is
+### Leaving, Reconnecting, Crashes
+- Leaving the page does not stop a run (it isn't tied to the request). A dropped connection is reopened by `usePanel` with backoff; each connection replays the full stored state through `diffPanel`.
+- Two tabs / reconnects: the lease allows exactly one runner (verified: 3 concurrent `runPanelJob` calls → 1 run).
+- Runner dies (deploy, instance shutdown): its lease expires after 60s; the next view starts a new runner that resumes at the first missing step (verified: killed mid-critic → resumed at critic, respondent not re-run). The client resets the regenerated turn on the repeated `agent_start`.
+- A stale runner that wakes up after losing its lease gets `LeaseLostError` on its next write and exits without touching status.
 
 ### Custom Persona
 - Save: `CustomPersonaEditor` → `PUT /api/user/persona` (Pro-gated) → stored as `UserDoc.customPersona`
@@ -75,8 +81,8 @@
 - Deep guard: server components/route handlers call `getSessionUser()` for full cryptographic verification; `redirect('/login')` on `null` is the actual authority for invalid/expired cookies (see repo-rules.md, corrected 2026-09-14 per NR-001)
 
 ### Usage Limit & Monthly Reset
-- Check: Firestore transaction in `POST /api/panels`: if `tier !== 'pro'` and `(resetAt === 0 || now >= resetAt)`, zero `freeRunsUsed` and advance `freeRunsResetAt` by 30 days, THEN check `freeRunsUsed >= 5` against the (possibly just-reset) value
-- Increment: stream route increments `freeRunsUsed` on `panel_complete` for non-pro users
+- Reserve: `reserveRun()` inside the creation (and retry) transaction: if the 30-day window passed, reset to 0 and advance `freeRunsResetAt`; then refuse at 5, else increment. Counting at creation closes the many-panels-before-any-completes bypass (verified: 12 concurrent → exactly 5)
+- Refund: `refundRun()` when a run errors (idempotent via `panel.runCounted`)
 - Paywall: 402 from `POST /api/panels` → `PaywallDialog` → `POST /api/stripe/create-checkout` → Stripe Checkout redirect
 - Upgrade: `checkout.session.completed` webhook → `tier: 'pro'` on user doc
 - Downgrade: `customer.subscription.deleted` webhook → `tier: 'free'`

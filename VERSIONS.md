@@ -8,7 +8,7 @@
 | Dependency | Current | Latest Known | Last Updated | Release Notes | Source | Notes |
 |---|---|---|---|---|---|---|
 | Node.js | v22.22.2 (runtime) | — | 2026-09-14T00:00Z | https://nodejs.org/en/blog/release | `node --version` (no `.nvmrc`/`engines` field found in package.json) | Not pinned anywhere in the repo — see Flags |
-| Next.js | 16.2.6 | 16.2.6 (current major, not independently re-verified beyond confirming proxy.ts is a v16 feature) | 2026-09-14T00:00Z | https://nextjs.org/blog/next-16 | package.json | **Every rule doc in this repo (AGENTS.md, .claude/rules/repo-rules.md, .claude/rules/bootstrap.md) says "Next.js 15" — this is factually wrong. `proxy.ts` (replacing `middleware.ts`) is a Next.js 16 feature that runs on the Node.js runtime, not edge. See Flags.** |
+| Next.js | ^16.4.3 | 16.4.3 | 2026-10-31T00:00Z | https://nextjs.org/blog/next-16 | package.json | Upgraded from 16.2.6 for critical security advisories (2026-10-30). `proxy.ts` is the Next.js 16 middleware replacement (Node.js runtime). |
 | TypeScript | ^5.9.3 | — | 2026-09-14T00:00Z | https://devblogs.microsoft.com/typescript/ | package.json | Not independently checked against latest this pass |
 
 ---
@@ -29,6 +29,7 @@
 
 | Date | Component | From | To | Tier | PR |
 |------|-----------|------|----|------|----|
+| 2026-10-30 | next, eslint-config-next | 16.2.6 | ^16.4.3 | minor (security: critical RCE advisories) | direct to main, b795596 |
 | 2026-10-05 | @anthropic-ai/sdk | ^0.98.0 | ^0.131.0 | minor (pre-1.0) | direct to main, f61c425 |
 
 ---

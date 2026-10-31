@@ -1,5 +1,13 @@
 # Agent Changelog: askpanel-web
 
+## 2026-10-31 — M0: security lockdown + background debate runs; v2 spec
+
+- **Audit (2026-10-30)** found: client-writable Firestore rules (self-upgrade to Pro, reset run count, arbitrary model/rounds run at our cost); Next.js 16.2.6 critical RCE advisories; debates dying on client disconnect (verified: Next aborts the response stream → enqueue throws → generator torn down) and restarting from round 1 with duplicates and double billing on return; free-limit bypass (checked at creation, counted at completion); title generation cut off after the response.
+- **Step 1 (`b795596`)**: `firestore.rules` deny all client access; `runPanel` uses `DEFAULT_MODEL` and clamps rounds to 1..3; next/eslint-config-next → 16.4.3 (no documented breaking changes in 16.3/16.4; verified incremental streaming under 16.4's native Node streams); `npm audit fix` → 0 critical (4 remaining highs: gRPC *server* advisories in the browser Firebase SDK's Firestore path, unreachable; npm's "fix" is a downgrade); removed unused client `getFirebaseDb`; `firebase.json` now deploys the composite index.
+- **Step 2 (`c7d0593`)**: `runPanelJob` runner with lease/heartbeat, resumable lease-checked orchestrator, Firestore-tailing stream route (`diffPanel`), reconnecting `usePanel`, reserve-at-creation/refund-on-error run accounting (`lib/billing/runs.ts`), `cpuAlwaysAllocated: true`. First automated tests (`npm test`, node:test, 11 tests). Verified end to end against the Firestore emulator + a fake Anthropic API (7 scenarios, all pass). Not verified: the HTTP stream route under real Firebase Auth, and the live Anthropic API.
+- **Spec (`5b74e2a`)**: `docs/engineering/plans/v2-conversational-spec.md` — conversational product with coordinator tool, compare-options mode, MCP distribution; milestones M1–M5.
+- Not modified: SACRED.md. S007's rule still holds, but its description references the removed `replayRounds()` — wording update needs user approval.
+
 ## 2026-10-05 — BL-030: model migration to claude-sonnet-5-5
 
 - User delegated the choice. Picked `claude-sonnet-5-5`: newest Sonnet in SDK 0.131, same tier/cost class as Sonnet 4.5, longest runway before deprecation, used in the SDK's own examples. No request-shape changes needed.

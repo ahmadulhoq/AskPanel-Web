@@ -6,16 +6,16 @@
 
 | Route | File | Responsibility |
 |---|---|---|
-| `POST /api/panels` | route.ts | Creates a panel doc. Validates question length (≥10 chars), persona key (falls back to `'general'`, allows `'custom'`), sanitises `userContext` (4000-char cap). Resolves follow-up context from `parentPanelId` (ownership-checked, outside the transaction). Merges user context + follow-up context. Inside one Firestore transaction: reads user doc, applies monthly free-run reset if `freeRunsResetAt` has passed, enforces the 5-run free limit (throws `FREE_LIMIT_REACHED` → 402), validates `maxRounds` against tier (free ≤2, pro ≤3), resolves and copies custom persona prompts onto the panel doc if `persona === 'custom'` (falls back to `'general'` if no custom persona saved), then `tx.set()`s the panel doc with `status: 'queued'`. |
-| `GET /api/panels/[panelId]/stream` | `[panelId]/stream/route.ts` | SSE stream. Auth + ownership check. If panel already `status: 'complete'`, replays all stored rounds via `replayRounds()` generator then emits `panel_complete` — no orchestrator call. If queued/running, replays stored rounds first (reconnection support), then continues with the live `runPanel()` generator, forwarding events. On `panel_complete`: increments `freeRunsUsed` for non-pro users, fires `generatePanelTitle()` (not awaited). |
+| `POST /api/panels` | route.ts | Creates a panel doc. Validates question (≥10 chars), persona (`'custom'` allowed, unknown → `'general'`), sanitises `userContext` (4000 chars). Resolves follow-up context from `parentPanelId` (ownership-checked, outside the transaction). In one transaction: `reserveRun()` (monthly reset + 5-run free limit + **counts the run now**, 402 on limit), clamps `maxRounds` by tier, copies the custom persona, `tx.set()`s the panel with `status: 'queued'` and `runCounted`. Does not start the run. |
+| `GET /api/panels/[panelId]/stream` | `[panelId]/stream/route.ts` | SSE. Auth + ownership. If `queued`/`running`, starts `runPanelJob()` detached (no-op while a lease is live). Then tails the panel doc with `onSnapshot` and converts each snapshot into SSE events via `diffPanel()` — the run never depends on this connection. Keep-alive comment every 15s; closes on `panel_complete`/`error`; cleans up on abort/cancel. |
 | `GET /api/panels/[panelId]/export` | `[panelId]/export/route.ts` | Auth + ownership check. Requires `status === 'complete'` (409 otherwise). Formats the full panel (all rounds + final answer) as Markdown via internal `formatMarkdown()`, returns as a `Content-Disposition: attachment` download. |
-| `POST /api/panels/[panelId]/retry` | `[panelId]/retry/route.ts` | Auth + ownership check. Requires `status === 'error'` (409 otherwise). Resets the panel doc: `status: 'queued'`, clears `errorMessage`/`rounds`/`finalAnswer`/`confidence`/`completedAt`, and resets `config.model` to the current `DEFAULT_MODEL` (the stored one may be retired). Client is expected to reload/reconnect the SSE stream afterward — this route does not itself start the orchestrator. |
+| `POST /api/panels/[panelId]/retry` | `[panelId]/retry/route.ts` | One transaction: auth/ownership/`status === 'error'` checks, `reserveRun()` again (the failure was refunded; friendly 402 at the limit), resets rounds/answer/live/run, `runCounted`, `config.model`. The client's reconnect starts the new runner. |
 
 ## Internal Helpers
 
 | Name | File | Responsibility |
 |---|---|---|
-| `replayRounds(rounds)` | stream/route.ts | Generator — converts persisted `PanelRound[]` back into the same SSE event shapes the live orchestrator would have emitted (`agent_start`/`agent_complete`/`synthesis_start`/`synthesis_result`). See SACRED S007. |
+| `diffPanel()` / `newCursor()` | `lib/panels/streamDiff.ts` | Replaced `replayRounds()` (2026-10-31): snapshot → SSE event diff; see `symbols/lib-panels.md` |
 | `encodeSSE(event)` | stream/route.ts | Formats one `SSEEvent` as an `data: ...\n\n` SSE frame |
 | `formatMarkdown(panel, panelId)` | export/route.ts | Builds the exported Markdown document: title, question, persona, date, confidence, per-round Respondent/Critic/Synthesis sections, Final Answer, attribution footer |
 

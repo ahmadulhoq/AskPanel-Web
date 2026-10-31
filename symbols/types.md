@@ -13,7 +13,8 @@
 | `RoundSynthesis` | index.ts | One round's synthesis result as persisted: decision, reasoning, confidence, issuesFound |
 | `PanelRound` | index.ts | One round as persisted in `panels/{id}.rounds[]`: roundNumber, respondent, critic, synthesizer (each nullable until that step completes) |
 | `PanelConfig` | index.ts | `{ maxRounds, model }` |
-| `PanelDoc` | index.ts | Full panel document shape — userId, question, title, persona, customPersona, parentPanelId, context, status, isPublic, createdAt, completedAt, config, rounds, finalAnswer, confidence, errorMessage |
+| `PanelDoc` | index.ts | Full panel document shape — userId, question, title, persona, customPersona, parentPanelId, context, status, isPublic, createdAt, completedAt, config, rounds, finalAnswer, confidence, errorMessage, plus run state: `live` (`LiveTurn` — in-progress agent text), `run` (`RunLease` — `{ id, heartbeatAt }`), `runCounted` |
+| `LiveTurn`, `RunLease` | index.ts | Background-run state written by `runPanelJob` (2026-10-31) |
 | `SSEEvent` | index.ts | Discriminated union of all 7 SSE event shapes: agent_start, agent_token, agent_complete, synthesis_start, synthesis_result, panel_complete, error. This is the contract between `orchestrator.ts` (producer), `stream/route.ts` (relay + `replayRounds()` synthesizer), and `usePanel.ts` (consumer). |
 | `AgentTurnState`, `SynthesisState`, `PanelState` | index.ts | Client-side derived state shapes built by `usePanel`'s reducer from the SSE event stream |
 

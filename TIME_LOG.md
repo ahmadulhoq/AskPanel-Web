@@ -6,3 +6,7 @@
 | BL-024-027 | SSRF hardening, follow-up privacy inheritance, Textarea bug fix, doc corrections | 2026-09-15 | ~3h | 2026-09-15T00:00Z | 2026-09-15T00:00Z | ~25 min | 9 (1 route rewritten, 3 components edited, 5 docs corrected) | completed |
 | BL-028 + housekeeping | SDK upgrade, firebase-admin v14 trial, proxy /account fix, TD-002, memory reconciliation | 2026-10-05 | ~3h | 2026-10-05T00:00Z | 2026-10-05T00:00Z | ~20 min | 7 repo files + 10 memory files | completed |
 | BL-030 | Migrate DEFAULT_MODEL off EOL claude-sonnet-4-5 | 2026-10-05 | ~1.5h | 2026-10-05T00:00Z | 2026-10-05T00:00Z | ~8 min | 4 (lib/anthropic.ts, retry route, arch doc, BACKLOG) | completed |
+| AUDIT | Full implementation audit + UI library evaluation | 2026-10-30 | ~6h | 2026-10-30T00:00Z | 2026-10-30T00:00Z | ~40 min | 0 (read-only) | completed |
+| M0-S1 | Firestore lockdown, run-config clamp, Next.js 16.4.3, audit fix | 2026-10-30 | ~3h | 2026-10-30T00:00Z | 2026-10-30T00:00Z | ~25 min | 6 | completed |
+| M0-S2 | Background debate runner, lease/resume, stream diff, run accounting, tests, emulator e2e | 2026-10-31 | ~3d | 2026-10-30T00:00Z | 2026-10-31T00:00Z | ~2.5h | 16 | completed |
+| V2-SPEC | v2 conversational spec + plugin evaluation | 2026-10-31 | ~1d | 2026-10-30T00:00Z | 2026-10-31T00:00Z | ~30 min | 1 | completed |

@@ -20,6 +20,7 @@ See `.memory/VERSIONS.md` for full detail and sourcing on each entry.
 
 | ID | Component | Issue | Resolution | Resolved |
 |----|-----------|-------|------------|----------|
+| DA-006 | next | 16.2.6 was in range of critical RCE advisories (image optimization, next/og, `use cache`). | Upgraded to 16.4.3; `npm audit` critical count 3 → 0. Remaining 4 highs are gRPC server-side advisories in the browser Firebase SDK's Firestore path — not reachable; no upstream fix (npm proposes a downgrade). | 2026-10-30 |
 | DA-005 | Model `claude-sonnet-4-5` | Deprecated, EOL 2026-11-30; was DEFAULT_MODEL for every agent call. | Migrated to `claude-sonnet-5-5`; retry route resets pinned `config.model`. Live smoke test pending (BL-031). | 2026-10-05 |
 | DA-003 | @anthropic-ai/sdk | Was ^0.98.0, ~30 minors behind. | Upgraded to ^0.131.0 after changelog review — no breaking changes to the APIs used (messages.create streaming, tools/tool_choice, cache_control). tsc + build pass (BL-028). | 2026-10-05 |
 | DA-001 | Docs (AGENTS.md, .claude/rules/repo-rules.md, .agents/rules/repo-rules.md, docs/engineering/plans/mvp-architecture.md) | All said "Next.js 15" but installed/running version is 16.2.6. | Corrected to "Next.js 16" in all four files; also noted `proxy.ts` runs on the Node.js runtime, not edge (BL-027). | 2026-09-15 |
