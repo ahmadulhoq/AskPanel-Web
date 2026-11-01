@@ -58,7 +58,9 @@ export const CONVENE_PANEL_TOOL: Anthropic.Tool = {
       },
     },
     required: ['mode', 'question', 'reason'],
+    additionalProperties: false,
   },
+  strict: true,
 }
 
 export type ReplyChunk = { type: 'text'; text: string } | { type: 'panel'; routing: MessageRouting }
@@ -71,7 +73,10 @@ export async function* streamReply(
 ): AsyncGenerator<ReplyChunk> {
   const stream = await getAnthropicClient().messages.create({
     model: DEFAULT_MODEL,
-    max_tokens: 1500,
+    // Thinking is on by default and counts toward max_tokens: leave room for it. Medium
+    // effort keeps chat quick while the coordinator still weighs whether to debate.
+    max_tokens: 8000,
+    output_config: { effort: 'medium' },
     system: [{ type: 'text', text: allowPanel ? COORDINATOR_SYSTEM : ANSWER_SYSTEM, cache_control: { type: 'ephemeral' } }],
     ...(allowPanel ? { tools: [CONVENE_PANEL_TOOL], tool_choice: { type: 'auto' as const } } : {}),
     messages,

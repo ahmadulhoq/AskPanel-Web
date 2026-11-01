@@ -21,7 +21,8 @@ export async function* streamAgent(
 ): AsyncGenerator<{ token?: string; full: string }> {
   const stream = await getAnthropicClient().messages.create({
     model,
-    max_tokens: 1500,
+    // Thinking (on by default) counts toward max_tokens; streaming, so a high cap is safe.
+    max_tokens: 16000,
     system: [{ type: 'text', text: prompt.system, cache_control: { type: 'ephemeral' } }],
     messages: [{ role: 'user', content: prompt.user }],
     stream: true,
@@ -37,26 +38,44 @@ export async function* streamAgent(
   yield { full }
 }
 
+// One structured answer through a tool call (non-streaming tool_use — SACRED S002). Claude
+// Sonnet 5.5 rejects a forced tool_choice with a 400, so the choice is "auto", the tool is
+// strict and the system prompt says to always call it; if the model answers in text anyway,
+// it is asked once more. Returns null if no tool call came back.
+export async function requestToolCall(
+  prompt: { system: string; user: string },
+  model: string,
+  tools: Anthropic.Tool[],
+  signal?: AbortSignal,
+): Promise<{ input: unknown; stopReason: string | null }> {
+  let stopReason: string | null = null
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const response = await getAnthropicClient().messages.create({
+      model,
+      // Room for thinking (on by default, counted in max_tokens) plus the tool input.
+      max_tokens: 16000,
+      system: [{ type: 'text', text: prompt.system, cache_control: { type: 'ephemeral' } }],
+      tools,
+      tool_choice: { type: 'auto' },
+      messages: [{ role: 'user', content: prompt.user }],
+    }, { signal })
+    const toolUse = response.content.find(b => b.type === 'tool_use')
+    if (toolUse?.type === 'tool_use') return { input: toolUse.input, stopReason: response.stop_reason }
+    stopReason = response.stop_reason
+    if (stopReason === 'refusal') break
+  }
+  return { input: null, stopReason }
+}
+
 async function callSynthesizer(
   prompt: { system: string; user: string },
   model: string,
   signal?: AbortSignal,
 ): Promise<{ decision: SynthesisDecision; confidence: ConfidenceLevel; reasoning: string; issuesFound: number; finalAnswer: string }> {
-  const response = await getAnthropicClient().messages.create({
-    model,
-    max_tokens: 800,
-    system: [{ type: 'text', text: prompt.system, cache_control: { type: 'ephemeral' } }],
-    tools: SYNTHESIZER_TOOL as Anthropic.Tool[],
-    tool_choice: { type: 'any' },
-    messages: [{ role: 'user', content: prompt.user }],
-  }, { signal })
+  const { input: raw } = await requestToolCall(prompt, model, SYNTHESIZER_TOOL, signal)
+  if (!raw) throw new Error('Synthesizer did not return a tool call')
 
-  const toolUse = response.content.find(b => b.type === 'tool_use')
-  if (!toolUse || toolUse.type !== 'tool_use') {
-    throw new Error('Synthesizer did not return a tool call')
-  }
-
-  const input = toolUse.input as {
+  const input = raw as {
     decision: SynthesisDecision
     confidence: ConfidenceLevel
     reasoning: string

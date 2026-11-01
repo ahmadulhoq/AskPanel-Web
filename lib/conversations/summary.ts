@@ -1,4 +1,4 @@
-import { getAnthropicClient, DEFAULT_MODEL } from '@/lib/anthropic'
+import { getAnthropicClient, LIGHT_MODEL } from '@/lib/anthropic'
 import { adminDb } from '@/lib/firebase/admin'
 import { summaryBacklog, transcriptLine, type SeqMessage } from './context'
 import { conversationRef } from './store'
@@ -30,8 +30,9 @@ export async function updateSummary(cid: string, input: SummaryInput): Promise<v
 
     const transcript = backlog.map(transcriptLine).filter(Boolean).join('\n')
     const res = await getAnthropicClient().messages.create({
-      model: DEFAULT_MODEL,
-      max_tokens: 700,
+      model: LIGHT_MODEL,
+      max_tokens: 1024,
+      thinking: { type: 'disabled' },
       system: [{ type: 'text', text: SUMMARY_SYSTEM, cache_control: { type: 'ephemeral' } }],
       messages: [{
         role: 'user',

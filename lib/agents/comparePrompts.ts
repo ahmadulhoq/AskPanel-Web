@@ -23,7 +23,7 @@ For each option, in order:
 - what would have to be true for it to fail.
 Test the options against the user's stated goals and constraints, and call out anything a proposer claimed without support. Be fair: if an option is strong, say so. Do not recommend a winner — the Judge does that. Clean markdown, under 400 words.`
 
-const JUDGE_SYSTEM = `You are the Judge in a compare-options panel. You have the user's question, the options the proposers put forward, and the Critic's assessment. Pick the option that best serves the user, using the judge_options tool.
+const JUDGE_SYSTEM = `You are the Judge in a compare-options panel. You have the user's question, the options the proposers put forward, and the Critic's assessment. Pick the option that best serves the user. Always respond by calling the judge_options tool — never with plain text.
 
 - Score every option from 1 to 10 for this user, with a one-sentence reason.
 - The finalAnswer is what the user reads first: recommend the winner, say why each other option lost, and name the conditions under which you would choose differently. Clean markdown.
@@ -84,10 +84,11 @@ export const JUDGE_TOOL: Anthropic.Tool[] = [
             type: 'object',
             properties: {
               option: { type: 'integer', description: 'Option number (1-based).' },
-              score: { type: 'integer', minimum: 1, maximum: 10 },
+              score: { type: 'integer', description: 'From 1 (poor fit) to 10 (excellent fit).' },
               summary: { type: 'string', description: 'One sentence: why this score.' },
             },
             required: ['option', 'score', 'summary'],
+            additionalProperties: false,
           },
         },
         reasoning: { type: 'string', description: 'One to three sentences on why the winner wins.' },
@@ -98,6 +99,9 @@ export const JUDGE_TOOL: Anthropic.Tool[] = [
         },
       },
       required: ['winner', 'scores', 'reasoning', 'confidence', 'finalAnswer'],
+      additionalProperties: false,
     },
+    // Strict schema (no numeric bounds: unsupported in strict mode; parseJudgement clamps).
+    strict: true,
   },
 ]
