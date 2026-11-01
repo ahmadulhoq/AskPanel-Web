@@ -7,7 +7,7 @@
 - **Next.js 16**: middleware is `proxy.ts`, export is named `proxy` (not `middleware`) — this is a Next.js 16 feature, runs on the Node.js runtime (not edge)
 - **Firebase Admin**: private key env var requires `.replace(/\\n/g, '\n')` — see `lib/firebase/admin.ts`
 - **Anthropic / Stripe / Firebase clients**: all lazy-initialized via getter functions to prevent SSR build failures
-- **Node.js**: no version pinned via `.nvmrc`/`engines.node`; `.bin/` wrappers are broken in this environment regardless of version — invoke via `node node_modules/...` directly
+- **Node.js 22+**: pinned via `engines.node: ">=22"` (firebase-admin 14 and @google-cloud/firestore 9 require it; App Hosting's Next.js support needs 22+). The App Hosting backend's runtime (Settings tab) must be `nodejs22` or later. `.bin/` wrappers are broken in this environment regardless of version — invoke via `node node_modules/...` directly
 
 ## Agent Orchestration Rules
 - The `isFinalRound` hard-guard in `orchestrator.ts` must never be removed — it prevents infinite loops when Synthesizer returns 'continue' on the last round

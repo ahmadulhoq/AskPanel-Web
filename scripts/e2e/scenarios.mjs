@@ -291,6 +291,7 @@ await scenario('15. deleting an account removes all its data and its sign-in, an
   assert.equal((await db.collection('rateLimits').where('uid', '==', 'u15').get()).size, 0)
   assert.equal(await user('u15'), undefined)
   await assert.rejects(adminAuth().getUser('u15'), (e) => e.code === 'auth/user-not-found')
+  await deleteAccount('u15') // sign-in already gone: still succeeds (relies on the auth/user-not-found code)
 })
 
 await scenario('16. panel list pages through everything, newest first, without repeats', async () => {
