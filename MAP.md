@@ -31,7 +31,7 @@
 | `components/account/` | Billing portal redirect | BillingPortalButton |
 | `lib/conversations/` | v2 conversation store, context, quick replies | `loadMessages()`, `toModelMessages()`, `debateContext()`, `streamReply()` |
 | `app/api/conversations/` | v2 conversation API | `POST /api/conversations`, `POST …/[cid]/messages`, `POST …/[cid]/debates` |
-| `app/(app)/chat/` + `components/chat/` | v2 chat UI (beta) | `ConversationView`, `DebateBlock`, `ChatComposer` |
+| `app/(app)/chat/[cid]` + `components/chat/` | v2 conversation UI (the product since M4; /dashboard lists conversations) | `ConversationView`, `DebateBlock`, `ChatComposer`, `ProposalCard` |
 | `app/(auth)/` | Sign-in/sign-up page | login |
 | `app/p/[panelId]/` | Public share view (no auth) | — |
 | `app/` (root) | Root layout + landing page | — |
@@ -81,8 +81,8 @@
 - Runner dies (deploy, instance shutdown): its lease expires after 60s; the next view starts a new runner that resumes at the first missing step (verified: killed mid-critic → resumed at critic, respondent not re-run). The client resets the regenerated turn on the repeated `agent_start`.
 - A stale runner that wakes up after losing its lease gets `LeaseLostError` on its next write and exits without touching status.
 
-### Conversation (v2 M1, beta at /chat)
-- New: `/chat` composer → `POST /api/conversations` → `/chat/[cid]?q=…&mode=…` → page passes `pending` (only if empty) → `ConversationView` drops the params with `router.replace`, then sends
+### Conversation (v2; the dashboard since M4, 2026-11-01)
+- New: dashboard composer → `POST /api/conversations` → `/chat/[cid]?q=…&mode=…` → page passes `pending` (only if empty) → `ConversationView` drops the params with `router.replace`, then sends
 - Enter (coordinator, 2026-11-01): `POST …/messages {mode:'reply'}` → `reserveReply()` → reply model with `convene_panel`: text → streamed reply; tool call → Pro: debate starts (reason + Just answer shown) / free: proposal card (Run the panel → `…/[mid]/run`, Just answer → `…/[mid]/answer`). Decisions and overrides → `routingEvents`
 - Debate (Debate button): `POST …/messages {mode:'debate'}` → `createPanel()` with `debateContext(history)` → runner starts immediately → assistant `kind:'debate'` message → `DebateBlock` renders `PanelThread` live
 - Debate this: `POST …/debates {messageId}` → debates the user message that reply answered, with the conversation before it as context
@@ -95,6 +95,9 @@
 - Save: `CustomPersonaEditor` → `PUT /api/user/persona` (Pro-gated) → stored as `UserDoc.customPersona`
 - Use: `PersonaSelector` selects `persona: 'custom'` → `POST /api/panels` copies the CURRENT saved `customPersona` onto the new panel doc's `PanelDoc.customPersona` at creation time → orchestrator never re-reads the user doc, only the panel doc (self-contained panel docs pattern, CONVENTIONS.md)
 - Editing/deleting the saved persona later does NOT retroactively change already-created panels — each panel's copy is frozen at creation time
+
+### v1 → v2 migration (2026-11-01, BL-044)
+- Dashboard load → `migrateUserPanels(uid, v1MigratedAt?)` → panels without a conversation become conversations (chains together) → `listConversations`. /panel/[id] and /p/[id] unchanged
 
 ### Deletion (2026-11-01, BL-040)
 - Panel: trash icon on /panel/[id] → `DELETE /api/panels/[id]` → stop if running (refund rule) → delete panel + its chat message

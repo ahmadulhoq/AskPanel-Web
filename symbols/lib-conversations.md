@@ -34,3 +34,14 @@ Conversation doc fields added 2026-11-01 (BL-048): `summary`, `summarizedThrough
 | `logRouting(uid, cid, mid, event, mode)` | routingLog.ts | `routingEvents` docs (no message text): answer, debate, propose, run_proposal, just_answer, debate_this, debate_button. Deleted with the account |
 | `getMessage(cid, mid)`, `loadMessages(cid, limit, beforeSeq?)` | store.ts | Direct read; history before a message |
 - Message fields: `kind: 'debate_proposal'`, `routing: { mode, question, reason }` (kept on coordinator debates for the reason line), `claimedAt` (transient, run claim). Context renders an open proposal as "[Suggested running the panel on this — the user has not run it]".
+
+## v2 M4 (2026-11-01, BL-044)
+| Name | File | Responsibility |
+|---|---|---|
+| `planMigration(panels)` / `migratedIds(rootId, panelId)` | migratePlan.ts | Pure (tested): parentPanelId chains → one conversation (oldest first), orphans/cycles safe; deterministic ids `v1-{root}`, `v1-q-{panel}`, `v1-a-{panel}` |
+| `migrateUserPanels(uid, migratedBefore)` | migrate.ts | Run on every dashboard load. Until `users.v1MigratedAt` is set (only after a fully successful pass) scans all the user's panels (v1 panels lack the conversationId field); afterwards only `conversationId == null` (panels made outside chat). BulkWriter with per-write failure tracking; a chain whose root's parent is already in a conversation joins it; recounts debates (first pass: all the user's conversations, as a backfill) |
+| `listConversations(uid, cursor?)` / `CONVERSATION_PAGE_SIZE` (30) | list.ts | Dashboard list by `updatedAt desc, __name__ desc`, exact cursor, `debateCount` clamped ≥0 |
+| `recountDebates(cid)` | store.ts | `debateCount` = count() of `kind == 'debate'` messages; called after any debate create/run/delete/"Just answer" and by migration (replaces increments; NOT_FOUND ignored) |
+| `debateBrief(attachment, history, summary, total)` | context.ts | Pure (tested): "Context the user attached:" (≤60% when there is history) + `debateContext` in the rest; used by all four debate-creating paths |
+- Messages: user messages may carry `context` (attachment, ≤4000 chars); `toModelMessages` appends it in full ("[Context the user attached]"), `transcriptLine` only an excerpt (600 chars); `debateContext` clips an over-long newest line instead of returning nothing. Assistant messages never copy it.
+- `components/chat/pendingContext.ts`: session-storage hand-off of a new conversation's first-message context.

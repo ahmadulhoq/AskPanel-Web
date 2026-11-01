@@ -19,3 +19,4 @@
 | BL-040 | Launch basics: legal pages, deletion, paging, rate limits (PR #5) | 2026-11-01 | ~4d | 2026-11-01T05:20Z | 2026-11-01T07:10Z | ~1.8h | 37 (21 new, 16 edited) | completed |
 | BL-043 | Compare-options debate mode (PR #6) | 2026-11-01 | ~1w | 2026-11-01T09:30Z | 2026-11-01T11:00Z | ~1.5h | 30 (9 new, 21 edited) | completed |
 | BL-042 | Coordinator auto-routing: convene_panel, proposals, Just answer, routing log (PR #7) | 2026-11-01 | ~1w | 2026-11-01T11:00Z | 2026-11-01T12:30Z | ~1.5h | 22 (9 new, 13 edited) | completed |
+| BL-044 | Conversation-list dashboard, v1 migration, chat context (PR #8) | 2026-11-01 | ~1w | 2026-11-01T10:20Z | 2026-11-01T12:00Z | ~1.7h | 37 (9 new, 25 edited, 3 removed) | completed |

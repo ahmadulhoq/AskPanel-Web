@@ -1,5 +1,12 @@
 # Agent Changelog: askpanel-web
 
+## 2026-11-01 — BL-044: conversations become the product, v2 M4 (PR #8)
+
+- Dashboard = composer + conversation list; v1 panels migrate on first visit (chains → one conversation; idempotent; late panels picked up); Pro context attachments in chat; "debates" wording; /chat redirects; v1 composer/list removed.
+- Self-review: 10 findings fixed — a big attachment could wipe a debate's brief, "Debate this" dropped attachments, attachment + brief overflowed 4000; migration flag set despite failures (v1 panels then unreachable); concurrent migrations double-counted; BulkWriter errors unhandled; panel deletion failed when its conversation was gone; counts negative/missing (now recounted); assistant docs duplicated attachments; extra reads on every dashboard load.
+- Also found while testing: awaiting BulkWriter writes before close() deadlocks (writes are sent on flush/close).
+- e2e: 20 runner scenarios, 40 browser checks; unit 57.
+
 ## 2026-11-01 — BL-042: coordinator auto-routing, v2 M2 (PR #7)
 
 - The reply model decides when to convene the panel (`convene_panel`); Pro auto-starts, free gets a Run / Just answer card; "Just answer" on a running coordinator debate stops it and answers; all decisions/overrides logged to `routingEvents`.

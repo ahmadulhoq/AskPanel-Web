@@ -15,3 +15,5 @@
 - No FIXME/TODO/HACK comments found.
 - `formatResetDate()` in dashboard/page.tsx is the one place a Firestore `Timestamp` is converted to a display string server-side, before the client boundary — correct application of the CONVENTIONS.md serialization-boundary rule.
 - See SACRED S008 for why the `redirect('/login')` calls here are intentional, not a rule violation.
+
+- 2026-11-01 (BL-044): dashboard = migration + conversation list + composer (copy says "debates"); /chat → redirect; /chat/[cid] back link "← All conversations"; /panel/[id] back link to its conversation, follow-up composer only for panels without one, "Continue in the conversation →".
