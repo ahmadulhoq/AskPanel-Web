@@ -58,8 +58,8 @@ export default function TermsPage() {
         <p>
           You keep ownership of what you submit and of the answers generated for you. You give us
           permission to store and process it, and to send it to our AI provider, only to run
-          AskPanel for you. Only submit content you have the right to share. Panels started from
-          the dashboard are public by default (see the{' '}
+          AskPanel for you. Only submit content you have the right to share. Debates are private
+          unless you share one; a shared debate can be read by anyone with its link (see the{' '}
           <Link href="/privacy" className="underline underline-offset-4">privacy policy</Link>).
         </p>
       </section>
@@ -68,6 +68,7 @@ export default function TermsPage() {
         <h2>Plans and payment</h2>
         <ul>
           <li>The free plan includes a limited number of debates and replies, which we may change.</li>
+          <li>Pro includes up to 100 debates in each 30-day period.</li>
           <li>
             Pro is a monthly subscription billed through Stripe. It renews automatically until you
             cancel. You can cancel at any time from the Account page; you keep Pro until the end

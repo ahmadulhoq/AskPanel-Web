@@ -5,7 +5,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { createPanel, MAX_CONTEXT_CHARS } from '@/lib/panels/create'
 import { stopIfRunning } from '@/lib/panels/delete'
 import { panelErrorResponse } from '@/lib/panels/errors'
-import { FreeLimitReachedError } from '@/lib/billing/runs'
+import { RunLimitReachedError } from '@/lib/billing/runs'
 import { limitInTransaction, RateLimitedError, rateLimitedResponse } from '@/lib/limits/rateLimit'
 import { reserveReply, ReplyLimitReachedError, FREE_DAILY_REPLIES } from '@/lib/billing/replies'
 import {
@@ -165,7 +165,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         logRouting(user.uid, cid, assistantRef.id, 'debate', routing.mode)
         return toMessageView(assistantRef.id, debate, { status: 'queued', finalAnswer: null, confidence: null })
       } catch (err) {
-        if (!(err instanceof FreeLimitReachedError || err instanceof RateLimitedError)) throw err
+        if (!(err instanceof RunLimitReachedError || err instanceof RateLimitedError)) throw err
       }
     }
     const proposal: NewMessage = { ...assistantMessage, kind: 'debate_proposal', content: '', status: 'complete', routing }

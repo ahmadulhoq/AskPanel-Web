@@ -8,14 +8,12 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { listConversations } from '@/lib/conversations/list'
 import { migrateUserPanels } from '@/lib/conversations/migrate'
+import { allowance, PRO_RUN_LIMIT } from '@/lib/billing/runs'
 
 export const metadata = { title: 'Dashboard — AskPanel' }
 
-function formatResetDate(timestamp: { toMillis(): number } | null | undefined): string | null {
-  if (!timestamp) return null
-  const d = new Date(timestamp.toMillis())
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
+const formatResetDate = (ms: number | null) =>
+  ms === null ? null : new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
 export default async function DashboardPage({
   searchParams,
@@ -30,9 +28,8 @@ export default async function DashboardPage({
   const userSnap = await db.collection('users').doc(user.uid).get()
   const userData = userSnap.data()
   const tier = (userData?.subscription?.tier ?? 'free') as 'free' | 'pro'
-  const freeRunsUsed = userData?.freeRunsUsed ?? 0
-  const resetDate = formatResetDate(userData?.freeRunsResetAt)
-  const runsLeft = Math.max(0, 5 - freeRunsUsed)
+  const { left: runsLeft, resetAt } = allowance(userData)
+  const resetDate = formatResetDate(resetAt)
   const customPersona = userData?.customPersona ?? null
 
   // Panels not in a conversation yet (v1 panels, or ones started outside chat) are put into
@@ -52,7 +49,16 @@ export default async function DashboardPage({
               {resetDate && <span className="ml-1 text-xs opacity-70">· resets {resetDate}</span>}
             </span>
           ) : (
-            <Badge variant="default">Pro</Badge>
+            <>
+              {/* Pro's monthly allowance: only worth showing once it's running low. */}
+              {runsLeft <= 10 && (
+                <span>
+                  {runsLeft} debate{runsLeft !== 1 ? 's' : ''} left
+                  {resetDate && <span className="ml-1 text-xs opacity-70">· resets {resetDate}</span>}
+                </span>
+              )}
+              <Badge variant="default">Pro</Badge>
+            </>
           )}
           <Link href="/account">
             <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
@@ -65,7 +71,7 @@ export default async function DashboardPage({
 
       {upgraded === '1' && (
         <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-950/30 dark:text-green-300">
-          You&apos;re now on Pro. Enjoy unlimited debates.
+          You&apos;re now on Pro: {PRO_RUN_LIMIT} debates a month, every persona, and context for your debates.
         </div>
       )}
 

@@ -99,6 +99,8 @@ export interface PanelDoc {
   live?: LiveTurn | null
   run?: RunLease | null
   runCounted?: boolean
+  // End of the allowance window the run was counted in (ms); refunds only apply within it.
+  runWindowEndsAt?: number
   // Set when the owner pressed Stop (status is then 'error').
   stoppedAt?: number | null
   mode?: PanelMode
@@ -187,7 +189,7 @@ export interface MessageView {
   status: MessageStatus
   seq: number
   panelId: string | null
-  debate: { status: PanelStatus; finalAnswer: string | null; confidence: ConfidenceLevel | null; stopped?: boolean } | null
+  debate: { status: PanelStatus; finalAnswer: string | null; confidence: ConfidenceLevel | null; stopped?: boolean; isPublic?: boolean } | null
   routing: MessageRouting | null
   context: string | null
 }

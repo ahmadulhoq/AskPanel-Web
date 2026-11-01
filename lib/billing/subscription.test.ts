@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { subscriptionFields, shouldApply, type StripeSubscriptionLike } from './subscription.ts'
+import { subscriptionFields, shouldApply, allowanceOnTierChange, type StripeSubscriptionLike } from './subscription.ts'
 
 const sub = (over: Partial<StripeSubscriptionLike> = {}): StripeSubscriptionLike => ({
   id: 'sub_1',
@@ -48,4 +48,12 @@ test('events for an old subscription cannot downgrade a newer one', () => {
   assert.equal(shouldApply(null, oldCanceled), true, 'no subscription on record applies')
   const newActive = subscriptionFields(sub({ id: 'sub_new2', status: 'active' }))
   assert.equal(shouldApply('sub_old', newActive), true, 'a new paying subscription replaces the old one')
+})
+
+test('allowanceOnTierChange: the free allowance starts fresh only when Pro ends', () => {
+  assert.deepEqual(allowanceOnTierChange('pro', 'free'), { freeRunsUsed: 0, freeRunsResetAt: null })
+  assert.deepEqual(allowanceOnTierChange('free', 'pro'), {})
+  assert.deepEqual(allowanceOnTierChange('pro', 'pro'), {}, 'a duplicate or renewal event changes nothing')
+  assert.deepEqual(allowanceOnTierChange('free', 'free'), {})
+  assert.deepEqual(allowanceOnTierChange(undefined, 'free'), {})
 })

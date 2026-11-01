@@ -39,6 +39,5 @@ export async function stopPanel(panelId: string, uid: string): Promise<{ refunde
     return panel.mode === 'compare' ? !compareRunCounts(panel.compare) : !firstRoundComplete(panel.rounds ?? [])
   })
 
-  // Pro runs aren't counted, so there is nothing to give back for them.
   return { refunded: refundable ? await refundRun(panelId) : false }
 }

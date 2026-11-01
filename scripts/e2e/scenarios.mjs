@@ -13,7 +13,7 @@ const imp = (p) => import(pathToFileURL(path.join(ROOT, p)).href)
 const { adminDb } = await imp('lib/firebase/admin.ts')
 const { runPanelJob } = await imp('lib/agents/runner.ts')
 const { newCursor, diffPanel } = await imp('lib/panels/streamDiff.ts')
-const { reserveRun, refundRun, FreeLimitReachedError } = await imp('lib/billing/runs.ts')
+const { reserveRun, refundRun, FreeLimitReachedError, ProLimitReachedError, PRO_RUN_LIMIT } = await imp('lib/billing/runs.ts')
 const { DEFAULT_MODEL } = await imp('lib/anthropic.ts')
 const { stopPanel, StopRejected } = await imp('lib/panels/stop.ts')
 const { STOPPED_MESSAGE } = await imp('lib/panels/constants.ts')
@@ -28,6 +28,7 @@ const { adminAuth } = await imp('lib/firebase/admin.ts')
 const { migrateUserPanels } = await imp('lib/conversations/migrate.ts')
 const { listConversations } = await imp('lib/conversations/list.ts')
 const { createApiToken, verifyApiToken, TokenLimitError, MAX_TOKENS } = await imp('lib/mcp/tokens.ts')
+const { setPanelSharing } = await imp('lib/panels/share.ts')
 const { Timestamp } = await import(pathToFileURL(createRequire(path.join(ROOT, 'package.json')).resolve('firebase-admin/firestore')).href)
 
 const db = adminDb()
@@ -231,17 +232,18 @@ await scenario('11. rolling summary: folds messages that left the reply window, 
 
 await scenario('12. Stop while the Synthesizer call is pending aborts it', async () => {
   await fake('/__control', { tokenDelayMs: 5, synthDelayMs: 10000 })
-  await makeUser('u12', 'pro', 0); await makePanel('p12', 'u12')
+  await makeUser('u12', 'pro', 1); await makePanel('p12', 'u12', { runCounted: true })
   const running = runPanelJob('p12')
   await until(async () => (await panel('p12'))?.rounds?.[0]?.critic, 'critic to finish')
   await sleep(300) // synthesizer request in flight
   const t0 = Date.now()
-  assert.deepEqual(await stopPanel('p12', 'u12'), { refunded: false }, 'Pro runs are not counted, so nothing is refunded')
+  assert.deepEqual(await stopPanel('p12', 'u12'), { refunded: true }, 'stopped before the round-1 verdict: a Pro run is refunded too')
   await running
   assert.ok(Date.now() - t0 < 3000, `runner took ${Date.now() - t0}ms to stop`)
   const p = await panel('p12')
   assert.equal(p.status, 'error'); assert.equal(p.errorMessage, STOPPED_MESSAGE)
   assert.equal(p.rounds[0].synthesizer ?? null, null)
+  assert.equal((await user('u12')).freeRunsUsed, 0)
 })
 
 await scenario('13. rate limits: the 21st reply in a minute is refused; failed debate attempts are not counted', async () => {
@@ -444,6 +446,39 @@ await scenario('23. an agent turn that runs out of room before any text fails th
   assert.equal(p.status, 'error'); assert.match(p.errorMessage, /critic ran out of room/)
   assert.ok(p.rounds[0].respondent.content, 'respondent kept'); assert.equal(p.rounds[0].critic, null, 'no empty critic turn')
   assert.equal((await fake('/__stats')).synthesizer, 0, 'the synthesizer never judged an empty critique')
+})
+
+await scenario('24. Pro: 100 debates per 30 days, counted and refunded like free runs', async () => {
+  await fake('/__control', { tokenDelayMs: 2, failRole: 'critic' })
+  await makeUser('u27', 'pro', PRO_RUN_LIMIT - 1)
+  const id = await createPanel({ uid: 'u27', question: 'Should we raise a seed round now?', isPublic: false })
+  assert.equal((await user('u27')).freeRunsUsed, PRO_RUN_LIMIT, 'a Pro debate is counted')
+  await until(async () => (await panel(id))?.status === 'error', 'the debate to fail')
+  await until(async () => (await user('u27')).freeRunsUsed === PRO_RUN_LIMIT - 1, 'refund', 5000)
+  assert.equal((await panel(id)).runCounted, false, 'a failed Pro debate is refunded')
+
+  await makeUser('u28', 'pro', PRO_RUN_LIMIT)
+  const resetAt = (await user('u28')).freeRunsResetAt.toMillis()
+  await assert.rejects(createPanel({ uid: 'u28', question: 'Should we raise a seed round now?', isPublic: false }),
+    (e) => e instanceof ProLimitReachedError && !(e instanceof FreeLimitReachedError) && e.resetAt === resetAt)
+  assert.equal((await user('u28')).freeRunsUsed, PRO_RUN_LIMIT, 'a refused debate is not counted')
+  await makeUser('u29', 'pro', PRO_RUN_LIMIT, Date.now() - 1000) // window over
+  const ref = db.collection('users').doc('u29')
+  await db.runTransaction((tx) => reserveRun(tx, ref, Date.now()))
+  assert.equal((await user('u29')).freeRunsUsed, 1, 'a new window starts at 1')
+  // A run counted in the previous window fails after the reset: nothing to give back now.
+  await makePanel('p24old', 'u29', { runCounted: true, runWindowEndsAt: Date.now() - 1000 })
+  assert.equal(await refundRun('p24old'), false)
+  assert.equal((await user('u29')).freeRunsUsed, 1); assert.equal((await panel('p24old')).runCounted, false)
+})
+
+await scenario('25. sharing a debate: only its owner can turn the link on or off', async () => {
+  await makePanel('p25', 'u30', { isPublic: false, status: 'complete' })
+  assert.equal(await setPanelSharing('p25', 'someone-else', true), false)
+  assert.equal((await panel('p25')).isPublic, false)
+  assert.equal(await setPanelSharing('p25', 'u30', true), true); assert.equal((await panel('p25')).isPublic, true)
+  assert.equal(await setPanelSharing('p25', 'u30', false), true); assert.equal((await panel('p25')).isPublic, false)
+  assert.equal(await setPanelSharing('missing', 'u30', true), false)
 })
 
 for (const r of results) console.log(r.join('  '))

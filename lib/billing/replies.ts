@@ -1,6 +1,7 @@
 import { Timestamp, type DocumentReference, type Transaction } from 'firebase-admin/firestore'
 
-// Placeholder until pricing is decided (v2 spec §13.2). Pro is unlimited for now.
+// Free tier: 30 quick replies a day (BL-047 decision, 2026-11-01). Pro replies have no daily
+// cap; the per-minute rate limit (lib/limits/rateLimit.ts) still applies.
 export const FREE_DAILY_REPLIES = 30
 const WINDOW_MS = 24 * 60 * 60 * 1000
 

@@ -92,10 +92,15 @@ export default function PrivacyPage() {
       <section>
         <h2>Sharing</h2>
         <p>
-          Panels started from the dashboard are <strong>public by default</strong>: anyone with
-          the link can read the question and the debate. You can make a panel private before
-          you start it, and private panels are visible only to you. Debates inside chat
-          conversations are always private.
+          Your conversations and debates are private: only you can see them. You can share a
+          single debate. Anyone with its link can then read the question, the debate and the
+          verdict, but not the rest of the conversation. The debate itself may mention things
+          you told the assistant earlier. You can stop sharing at any time, and the link stops
+          working.
+        </p>
+        <p className="mt-2">
+          Panels created before conversations existed were public by default and keep their
+          links until you stop sharing them.
         </p>
       </section>
 

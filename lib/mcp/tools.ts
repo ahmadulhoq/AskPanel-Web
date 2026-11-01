@@ -2,7 +2,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { PERSONAS } from '@/lib/agents/personas'
 import { createPanel, MAX_CONTEXT_CHARS } from '@/lib/panels/create'
-import { FreeLimitReachedError } from '@/lib/billing/runs'
+import { FreeLimitReachedError, ProLimitReachedError, PRO_RUN_LIMIT, resetDateLabel } from '@/lib/billing/runs'
 import { RateLimitedError } from '@/lib/limits/rateLimit'
 import { sanitizeDebateSettings } from '@/lib/conversations/settings'
 import { titleConversation } from '@/lib/conversations/title'
@@ -112,6 +112,9 @@ async function startDebate(uid: string, args: Record<string, unknown>): Promise<
     })
   } catch (err) {
     await adminDb().recursiveDelete(conversation).catch(() => {})
+    if (err instanceof ProLimitReachedError) {
+      return text(`The user has used their ${PRO_RUN_LIMIT} AskPanel debates for this month. More from ${resetDateLabel(err.resetAt)}.`, undefined, true)
+    }
     if (err instanceof FreeLimitReachedError) {
       return text(`The user has used their free AskPanel debates for this month. They can upgrade at ${APP_URL()}/account.`, undefined, true)
     }

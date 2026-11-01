@@ -209,6 +209,27 @@ try {
   check('a finished debate expands to its full transcript', expanded && await page.getByText('critic view').count() >= 1)
   await page.screenshot({ path: `${SHOTS}/6-chat-after-return.png` })
 
+  // Share one debate, open its link signed out, then stop sharing.
+  await page.getByRole('button', { name: 'Share debate' }).first().click()
+  const shareDialog = page.getByRole('dialog')
+  check('sharing a chat debate says the rest of the conversation stays private',
+    /rest of your conversation stays private/.test(await shareDialog.innerText()))
+  await shareDialog.getByRole('button', { name: 'Create link' }).click()
+  const link = await shareDialog.getByLabel('Share link').inputValue({ timeout: 10000 })
+  await page.screenshot({ path: `${SHOTS}/6b-share-dialog.png` })
+  const sharedPath = new URL(link).pathname
+  const anon = await browser.newContext()
+  const visitor = await anon.newPage()
+  const shared = await visitor.goto(BASE + sharedPath)
+  check('a shared debate opens for someone signed out', /^\/p\//.test(sharedPath) && shared.status() === 200 && await visitor.getByText('Verdict').first().isVisible(), `${sharedPath} ${shared.status()}`)
+  check('the shared page shows the debate, not the conversation', await visitor.getByText('reply view').count() === 0)
+  await shareDialog.getByRole('button', { name: 'Stop sharing' }).click()
+  await shareDialog.waitFor({ state: 'hidden', timeout: 10000 })
+  check('after Stop sharing, the link no longer works', (await visitor.goto(BASE + sharedPath)).status() === 404)
+  const sharedBlock = page.locator(`[data-panel-id="${sharedPath.split('/').pop()}"]`).first()
+  check('the debate shows as not shared again', await sharedBlock.getByRole('button', { name: 'Share debate' }).count() === 1)
+  await anon.close()
+
   // Stop a running debate.
   await fake('/__control', { tokenDelayMs: 150 })
   await page.locator('textarea').fill('Should we hire a head of sales before product-market fit?')
@@ -305,6 +326,8 @@ try {
 
   // ── MCP server: API tokens, both protocol eras, async debate tools ────
   await page.goto(BASE + '/account')
+  const plan = await page.getByText(/debates remaining this month/).innerText()
+  check('Pro shows its monthly allowance, counting debates already run', /^\d+ of 100 debates remaining this month$/.test(plan) && !plan.startsWith('100 '), plan)
   await page.getByPlaceholder('Token name, e.g. Claude Code on my laptop').fill('e2e laptop')
   await page.getByRole('button', { name: 'Create token' }).click()
   const apiToken = (await page.locator('[data-token]').innerText()).trim()
