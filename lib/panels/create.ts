@@ -68,11 +68,14 @@ export async function createPanel(input: CreatePanelInput): Promise<string> {
       }
     }
 
+    // Pro personas are locked in the UI; enforce it here too.
+    const allowed = persona === 'custom' ? !!customPersona : tier === 'pro' || !PERSONA_MAP[persona]?.proOnly
+
     tx.set(db.collection('panels').doc(panelId), {
       userId: uid,
       question: question.trim(),
       title: null,
-      persona: persona === 'custom' && !customPersona ? 'general' : persona,
+      persona: allowed ? persona : 'general',
       customPersona,
       parentPanelId,
       conversationId: input.conversationId ?? null,

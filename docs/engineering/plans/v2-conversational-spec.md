@@ -111,8 +111,9 @@ All Firestore access stays server-side; client rules deny everything (done in M0
 ```
 conversations/{cid}
   userId, title, isPublic, createdAt, updatedAt
-  summary: string | null          // rolling summary
-  summarizedThrough: messageId | null
+  summary: string | null          // rolling summary (built in BL-048)
+  summarizedThroughSeq: number    // messages with seq <= this are in the summary
+  debateSettings: { persona, maxRounds }  // last used in this conversation
 
 conversations/{cid}/messages/{mid}
   role: 'user' | 'assistant'
@@ -126,6 +127,7 @@ panels/{pid}                      // unchanged v1 shape, plus:
   conversationId?: string
   messageId?: string
   mode: 'critique' | 'compare'    // absent = 'critique'
+  stoppedAt?: number              // owner pressed Stop (status 'error')
 ```
 
 Reusing `panels` means the runner, export, share page, retry and replay all work for

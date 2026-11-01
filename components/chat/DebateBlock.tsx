@@ -6,6 +6,8 @@ import { Streamdown } from 'streamdown'
 import { ChevronDown, ChevronUp, Scale } from 'lucide-react'
 import { PanelThread } from '@/components/panel/PanelThread'
 import { ConfidenceBadge } from '@/components/panel/ConfidenceBadge'
+import { StopButton } from '@/components/panel/StopButton'
+import { STOPPED_MESSAGE } from '@/lib/panels/constants'
 import type { ConfidenceLevel, MessageView } from '@/types'
 
 interface Props {
@@ -21,28 +23,43 @@ export function DebateBlock({ panelId, initial }: Props) {
       ? { finalAnswer: initial.finalAnswer, confidence: initial.confidence }
       : null,
   )
-  const [open, setOpen] = useState(verdict === null)
-  const failed = initial?.status === 'error' && !verdict
+  const [failure, setFailure] = useState<'stopped' | 'failed' | null>(
+    initial?.status === 'error' && !verdict ? (initial.stopped ? 'stopped' : 'failed') : null,
+  )
+  const [open, setOpen] = useState(verdict === null && failure === null)
+  const settled = verdict !== null || failure !== null
 
-  const label = verdict ? 'Panel verdict' : failed ? 'Panel debate failed' : 'Panel deliberating…'
+  const label = verdict
+    ? 'Panel verdict'
+    : failure === 'stopped' ? 'Debate stopped' : failure === 'failed' ? 'Panel debate failed' : 'Panel deliberating…'
 
   return (
     <div className="rounded-2xl border bg-card">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-3">
         <div className="flex items-center gap-2">
-          <Scale className={`h-4 w-4 ${verdict || failed ? 'text-muted-foreground' : 'animate-pulse text-primary'}`} />
+          <Scale className={`h-4 w-4 ${settled ? 'text-muted-foreground' : 'animate-pulse text-primary'}`} />
           <span className="whitespace-nowrap text-sm font-semibold">{label}</span>
           {verdict && <ConfidenceBadge level={verdict.confidence} />}
         </div>
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          className="flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          aria-expanded={open}
-        >
-          {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-          {open ? 'Hide debate' : 'Show debate'}
-        </button>
+        <div className="flex items-center gap-2">
+          {!settled && (
+            <StopButton
+              panelId={panelId}
+              onStopped={() => setFailure('stopped')}
+              // Show the thread so it picks up the real outcome from the stream.
+              onAlreadyFinished={() => setOpen(true)}
+            />
+          )}
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            className="flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-expanded={open}
+          >
+            {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            {open ? 'Hide debate' : 'Show debate'}
+          </button>
+        </div>
       </div>
 
       <div className="border-t px-4 py-4">
@@ -50,7 +67,9 @@ export function DebateBlock({ panelId, initial }: Props) {
           <PanelThread
             panelId={panelId}
             showFollowUp={false}
+            canStop={false}
             onComplete={(finalAnswer, confidence) => setVerdict({ finalAnswer, confidence })}
+            onError={(message) => setFailure(message === STOPPED_MESSAGE ? 'stopped' : 'failed')}
           />
         ) : verdict ? (
           <>
@@ -59,6 +78,10 @@ export function DebateBlock({ panelId, initial }: Props) {
               Full transcript
             </Link>
           </>
+        ) : failure ? (
+          <p className="text-sm text-muted-foreground">
+            {failure === 'stopped' ? STOPPED_MESSAGE : 'The debate failed.'} Show the debate to see how far it got or to try again.
+          </p>
         ) : (
           <p className="text-sm text-muted-foreground">The panel is still deliberating. Show the debate to watch it live.</p>
         )}

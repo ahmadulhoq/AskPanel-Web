@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { usePanel } from '@/hooks/usePanel'
+import { usePanel, CONNECTION_LOST_MESSAGE } from '@/hooks/usePanel'
 import { AgentTurn } from './AgentTurn'
 import { SynthesisCard } from './SynthesisCard'
 import { FinalAnswer } from './FinalAnswer'
 import { FollowUpComposer } from './FollowUpComposer'
 import { RetryButton } from './RetryButton'
+import { StopButton } from './StopButton'
 import type { ConfidenceLevel } from '@/types'
 
 interface Props {
@@ -15,20 +16,30 @@ interface Props {
   isPublic?: boolean
   // Inside a conversation the chat input replaces the follow-up box.
   showFollowUp?: boolean
+  // Show a Stop button while the debate runs (off when the parent renders its own).
+  canStop?: boolean
   onComplete?: (finalAnswer: string, confidence: ConfidenceLevel) => void
+  onError?: (message: string) => void
 }
 
-export function PanelThread({ panelId, persona = 'general', isPublic = true, showFollowUp = true, onComplete }: Props) {
+export function PanelThread({
+  panelId, persona = 'general', isPublic = true, showFollowUp = true, canStop = true, onComplete, onError,
+}: Props) {
   const state = usePanel(panelId)
 
-  // Report completion once, even if the parent passes a new callback on every render.
+  // Report the outcome once, even if the parent passes new callbacks on every render.
   const reported = useRef(false)
   useEffect(() => {
-    if (state.status === 'complete' && state.finalAnswer && state.confidence && !reported.current) {
+    if (reported.current) return
+    if (state.status === 'complete' && state.finalAnswer && state.confidence) {
       reported.current = true
       onComplete?.(state.finalAnswer, state.confidence)
+    } else if (state.status === 'error' && state.errorMessage !== CONNECTION_LOST_MESSAGE) {
+      // A lost connection is this page's problem, not the debate's: don't report it.
+      reported.current = true
+      onError?.(state.errorMessage ?? '')
     }
-  }, [state.status, state.finalAnswer, state.confidence, onComplete])
+  }, [state.status, state.finalAnswer, state.confidence, state.errorMessage, onComplete, onError])
 
   if (state.status === 'idle') {
     return <PanelSkeleton />
@@ -75,6 +86,12 @@ export function PanelThread({ panelId, persona = 'general', isPublic = true, sho
             ))}
         </div>
       ))}
+
+      {canStop && state.status === 'running' && (
+        <div className="flex justify-center">
+          <StopButton panelId={panelId} />
+        </div>
+      )}
 
       {state.status === 'complete' && state.finalAnswer && state.confidence && (
         <>

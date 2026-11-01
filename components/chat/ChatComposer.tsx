@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowUp, Scale } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { ArrowUp, Scale, SlidersHorizontal } from 'lucide-react'
 
 const MAX_HEIGHT = 200
 
@@ -13,11 +13,14 @@ interface Props {
   disabled?: boolean
   placeholder?: string
   autoFocus?: boolean
+  // Debate settings: a summary chip in the toolbar that toggles the settings panel.
+  settings?: { label: string; panel: ReactNode }
 }
 
-export function ChatComposer({ onSubmit, disabled = false, placeholder, autoFocus = false }: Props) {
+export function ChatComposer({ onSubmit, disabled = false, placeholder, autoFocus = false, settings }: Props) {
   const [text, setText] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const resize = useCallback(() => {
@@ -47,6 +50,7 @@ export function ChatComposer({ onSubmit, disabled = false, placeholder, autoFocu
 
   return (
     <div>
+      {settings && showSettings && <div className="mb-2">{settings.panel}</div>}
       <div className="relative flex flex-col rounded-3xl border border-input bg-background shadow-sm transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/40">
         <textarea
           ref={textareaRef}
@@ -65,6 +69,18 @@ export function ChatComposer({ onSubmit, disabled = false, placeholder, autoFocu
           className="w-full resize-none bg-transparent px-4 pt-3.5 pb-12 text-base leading-relaxed outline-none placeholder:text-muted-foreground disabled:opacity-60 md:text-sm"
         />
         <div className="absolute bottom-0 left-0 right-0 flex items-center justify-end gap-2 px-3 pb-2.5">
+          {settings && (
+            <button
+              type="button"
+              onClick={() => setShowSettings((s) => !s)}
+              aria-expanded={showSettings}
+              title="Debate panel settings"
+              className="mr-auto flex h-8 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{settings.label}</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => submit('debate')}

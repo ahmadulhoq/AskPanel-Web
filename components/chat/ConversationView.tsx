@@ -9,21 +9,29 @@ import { drainSSE } from '@/lib/sse/parse'
 import { AssistantReply } from './AssistantReply'
 import { ChatComposer, type SendMode } from './ChatComposer'
 import { DebateBlock } from './DebateBlock'
-import type { MessageView, ReplyStreamEvent } from '@/types'
+import { DebateSettingsPanel, debateSettingsLabel } from './DebateSettingsPanel'
+import type { CustomPersona, DebateSettings, MessageView, ReplyStreamEvent } from '@/types'
 
 interface Props {
   conversationId: string
   initialMessages: MessageView[]
   // First message handed over from the new-conversation composer.
   pending: { content: string; mode: SendMode } | null
+  tier: 'free' | 'pro'
+  initialCustomPersona: CustomPersona | null
+  initialSettings: DebateSettings
 }
 
-export function ConversationView({ conversationId, initialMessages, pending }: Props) {
+export function ConversationView({
+  conversationId, initialMessages, pending, tier, initialCustomPersona, initialSettings,
+}: Props) {
   const router = useRouter()
   const [messages, setMessages] = useState(initialMessages)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [showPaywall, setShowPaywall] = useState(false)
+  const [settings, setSettings] = useState(initialSettings)
+  const [customPersona, setCustomPersona] = useState(initialCustomPersona)
 
   const patch = (id: string, change: (m: MessageView) => MessageView) =>
     setMessages((all) => all.map((m) => (m.id === id ? change(m) : m)))
@@ -46,7 +54,7 @@ export function ConversationView({ conversationId, initialMessages, pending }: P
       const res = await fetch(`/api/conversations/${conversationId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, mode }),
+        body: JSON.stringify({ content, mode, settings }),
       })
       if (!res.ok) return await handleFailure(res)
 
@@ -95,7 +103,7 @@ export function ConversationView({ conversationId, initialMessages, pending }: P
     } finally {
       setBusy(false)
     }
-  }, [conversationId, handleFailure])
+  }, [conversationId, handleFailure, settings])
 
   const debateReply = useCallback(async (messageId: string) => {
     setError('')
@@ -104,7 +112,7 @@ export function ConversationView({ conversationId, initialMessages, pending }: P
       const res = await fetch(`/api/conversations/${conversationId}/debates`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messageId }),
+        body: JSON.stringify({ messageId, settings }),
       })
       if (!res.ok) {
         await handleFailure(res)
@@ -117,7 +125,7 @@ export function ConversationView({ conversationId, initialMessages, pending }: P
     } finally {
       setBusy(false)
     }
-  }, [conversationId, handleFailure])
+  }, [conversationId, handleFailure, settings])
 
   // Send the first message once, after dropping it from the URL so a refresh can't resend it.
   const sentPending = useRef(false)
@@ -150,7 +158,23 @@ export function ConversationView({ conversationId, initialMessages, pending }: P
 
       <div className="mx-auto w-full max-w-2xl px-4 pb-4">
         {error && <p className="mb-2 px-2 text-sm text-destructive" role="alert">{error}</p>}
-        <ChatComposer onSubmit={send} disabled={busy} autoFocus />
+        <ChatComposer
+          onSubmit={send}
+          disabled={busy}
+          autoFocus
+          settings={{
+            label: debateSettingsLabel(settings, customPersona),
+            panel: (
+              <DebateSettingsPanel
+                tier={tier}
+                value={settings}
+                onChange={setSettings}
+                customPersona={customPersona}
+                onCustomPersonaChange={setCustomPersona}
+              />
+            ),
+          }}
+        />
       </div>
 
       <PaywallDialog open={showPaywall} onClose={() => setShowPaywall(false)} />

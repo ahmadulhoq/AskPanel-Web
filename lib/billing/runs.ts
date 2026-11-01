@@ -33,16 +33,17 @@ export async function reserveRun(tx: Transaction, userRef: DocumentReference, no
 }
 
 // Gives back a counted run when the panel fails. Idempotent: the panel's runCounted flag
-// is cleared in the same transaction.
-export async function refundRun(panelId: string) {
+// is cleared in the same transaction. Returns whether a run was actually given back.
+export async function refundRun(panelId: string): Promise<boolean> {
   const db = adminDb()
   const panelRef = db.collection('panels').doc(panelId)
-  await db.runTransaction(async (tx) => {
+  return db.runTransaction(async (tx) => {
     const panel = (await tx.get(panelRef)).data()
-    if (!panel?.runCounted) return
+    if (!panel?.runCounted) return false
     const userRef = db.collection('users').doc(panel.userId)
     const used: number = (await tx.get(userRef)).data()?.freeRunsUsed ?? 0
     tx.update(userRef, { freeRunsUsed: Math.max(0, used - 1) })
     tx.update(panelRef, { runCounted: false })
+    return true
   })
 }

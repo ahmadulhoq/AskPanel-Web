@@ -5,10 +5,24 @@ import { adminDb } from '@/lib/firebase/admin'
 import { createPanel } from '@/lib/panels/create'
 import { FreeLimitReachedError } from '@/lib/billing/runs'
 import { debateContext } from '@/lib/conversations/context'
+import { sanitizeDebateSettings } from '@/lib/conversations/settings'
 import {
   conversationRef, getOwnedConversation, loadMessages, messagesRef, nextSeq, toMessageView,
 } from '@/lib/conversations/store'
 import type { NewMessage } from '@/lib/conversations/store'
+import type { ConversationDoc, MessageView } from '@/types'
+
+// Background for a debate on history[questionIndex]. The rolling summary is used only if it
+// covers nothing from the question onwards; for an older question it would leak what came
+// after, so the messages before it are used instead.
+function briefBefore(history: MessageView[], questionIndex: number, conversation: ConversationDoc) {
+  const through = conversation.summarizedThroughSeq ?? 0
+  const before = history.slice(0, questionIndex)
+  if (conversation.summary && history[questionIndex].seq > through) {
+    return debateContext(before.filter((m) => m.seq > through), undefined, conversation.summary)
+  }
+  return debateContext(before)
+}
 
 // "Debate this": run the panel on the user message that a quick reply answered.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ cid: string }> }) {
@@ -17,7 +31,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  if (!(await getOwnedConversation(cid, user.uid))) {
+  const conversation = await getOwnedConversation(cid, user.uid)
+  if (!conversation) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
@@ -34,6 +49,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'Give the panel a bit more to debate (at least 10 characters).' }, { status: 400 })
   }
 
+  const debateSettings = sanitizeDebateSettings(body.settings)
+  const settingsUpdate = body.settings ? { debateSettings } : {}
   const assistantRef = messagesRef(cid).doc()
   let panelId: string
   try {
@@ -41,7 +58,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       uid: user.uid,
       question,
       isPublic: false,
-      userContext: debateContext(history.slice(0, questionIndex)),
+      persona: debateSettings.persona,
+      maxRounds: debateSettings.maxRounds,
+      userContext: briefBefore(history, questionIndex, conversation),
       conversationId: cid,
       messageId: assistantRef.id,
     })
@@ -57,7 +76,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   const batch = adminDb().batch()
   batch.set(assistantRef, { ...message, createdAt: FieldValue.serverTimestamp() })
-  batch.update(conversationRef(cid), { updatedAt: FieldValue.serverTimestamp() })
+  batch.update(conversationRef(cid), { updatedAt: FieldValue.serverTimestamp(), ...settingsUpdate })
   await batch.commit()
 
   return NextResponse.json({

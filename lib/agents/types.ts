@@ -17,6 +17,8 @@ export interface OrchestratorInput {
   rounds?: PanelRound[]
   // Every write is checked against this lease so a stale runner can't overwrite a newer one.
   leaseId?: string
+  // Aborted by the runner when it loses its lease (e.g. Stop): cancels the model call in flight.
+  signal?: AbortSignal
 }
 
 export type SSEGenerator = AsyncGenerator<SSEEvent, void, unknown>

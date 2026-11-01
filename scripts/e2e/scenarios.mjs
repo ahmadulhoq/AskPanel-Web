@@ -15,6 +15,11 @@ const { runPanelJob } = await imp('lib/agents/runner.ts')
 const { newCursor, diffPanel } = await imp('lib/panels/streamDiff.ts')
 const { reserveRun, refundRun, FreeLimitReachedError } = await imp('lib/billing/runs.ts')
 const { DEFAULT_MODEL } = await imp('lib/anthropic.ts')
+const { stopPanel, StopRejected } = await imp('lib/panels/stop.ts')
+const { STOPPED_MESSAGE } = await imp('lib/panels/constants.ts')
+const { createPanel } = await imp('lib/panels/create.ts')
+const { updateSummary } = await imp('lib/conversations/summary.ts')
+const { loadMessages } = await imp('lib/conversations/store.ts')
 const { Timestamp } = await import(pathToFileURL(createRequire(path.join(ROOT, 'package.json')).resolve('firebase-admin/firestore')).href)
 
 const db = adminDb()
@@ -68,7 +73,7 @@ await scenario('1. happy path: run completes, viewer gets the full event sequenc
   assert.ok(completed.startsWith(tokens.map((t) => t.token).join('')), 'streamed deltas are a prefix of the final text')
   console.log('   respondent live updates:', tokens.length)
   assert.equal(count(w.events, 'agent_start', 'respondent'), 1); assert.equal(count(w.events, 'agent_start', 'critic'), 1)
-  assert.deepEqual(await fake('/__stats'), { respondent: 1, critic: 1, synthesizer: 1, title: 1, reply: 0 })
+  assert.deepEqual(await fake('/__stats'), { respondent: 1, critic: 1, synthesizer: 1, title: 1, reply: 0, summary: 0 })
   assert.equal((await user('u1')).freeRunsUsed, 1, 'successful run is not refunded')
 })
 
@@ -150,6 +155,83 @@ await scenario('7. an expired monthly window resets before counting', async () =
   await db.runTransaction((tx) => reserveRun(tx, ref, Date.now()))
   const u = await user('u7')
   assert.equal(u.freeRunsUsed, 1); assert.ok(u.freeRunsResetAt.toMillis() > Date.now() + 29 * 86400000)
+})
+
+await scenario('8. Stop mid-run: runner aborts within a second, run refunded, no further model calls', async () => {
+  await fake('/__control', { tokenDelayMs: 100 })
+  await makeUser('u8', 'free', 1); await makePanel('p8', 'u8', { runCounted: true })
+  const running = runPanelJob('p8')
+  await until(async () => ((await panel('p8'))?.live?.content ?? '').length > 0, 'respondent text')
+  const t0 = Date.now()
+  assert.deepEqual(await stopPanel('p8', 'u8'), { refunded: true })
+  await running
+  assert.ok(Date.now() - t0 < 3000, `runner took ${Date.now() - t0}ms to stop`)
+  await sleep(300)
+  const p = await panel('p8')
+  assert.equal(p.status, 'error'); assert.equal(p.errorMessage, STOPPED_MESSAGE)
+  assert.ok(p.stoppedAt); assert.equal(p.run, null); assert.equal(p.live, null, 'no stale live text left behind')
+  assert.equal(p.runCounted, false); assert.equal((await user('u8')).freeRunsUsed, 0)
+  const s = await fake('/__stats'); assert.equal(s.critic, 0); assert.equal(s.synthesizer, 0)
+  await assert.rejects(stopPanel('p8', 'u8'), (e) => e instanceof StopRejected && e.status === 409)
+  await assert.rejects(stopPanel('p8', 'someone-else'), (e) => e instanceof StopRejected && e.status === 404)
+})
+
+await scenario('9. Stop after the round-1 verdict: the run is not refunded', async () => {
+  await fake('/__control', { tokenDelayMs: 30, decision: 'continue' })
+  await makeUser('u9', 'free', 1); await makePanel('p9', 'u9', { runCounted: true })
+  const running = runPanelJob('p9')
+  await until(async () => (await panel('p9'))?.live?.round === 2, 'round 2 to start')
+  assert.deepEqual(await stopPanel('p9', 'u9'), { refunded: false })
+  await running
+  assert.equal((await panel('p9')).status, 'error')
+  assert.equal((await user('u9')).freeRunsUsed, 1)
+})
+
+await scenario('10. free users cannot get a Pro persona through the API', async () => {
+  await makeUser('u10', 'free', 0)
+  const id = await createPanel({ uid: 'u10', question: 'Should we raise a seed round now?', isPublic: false, persona: 'startup', maxRounds: 3 })
+  await until(async () => (await panel(id))?.status === 'complete', 'panel to finish')
+  const p = await panel(id)
+  assert.equal(p.persona, 'general'); assert.equal(p.config.maxRounds, 2)
+})
+
+await scenario('11. rolling summary: folds messages that left the reply window, once', async () => {
+  const cid = 'c11'
+  await db.collection('conversations').doc(cid).set({ userId: 'u11', title: 'Launch', createdAt: Timestamp.now(), updatedAt: Timestamp.now() })
+  const batch = db.batch()
+  for (let i = 0; i < 14; i++) {
+    batch.set(db.collection('conversations').doc(cid).collection('messages').doc(`m${i}`), {
+      role: i % 2 ? 'assistant' : 'user', kind: 'text', content: `${i}: ` + 'launch detail '.repeat(200),
+      panelId: null, status: 'complete', seq: 1000 + i, createdAt: Timestamp.now(),
+    })
+  }
+  await batch.commit()
+  const history = await loadMessages(cid, 80)
+  await updateSummary(cid, { history, summary: null, summarizedThroughSeq: 0 })
+  const c = (await db.collection('conversations').doc(cid).get()).data()
+  assert.equal(c.summary, 'They are planning a product launch next month.')
+  assert.ok(c.summarizedThroughSeq >= 1000 && c.summarizedThroughSeq < 1013, `through ${c.summarizedThroughSeq}`)
+  // Nothing new has left the window: no model call.
+  await updateSummary(cid, { history, summary: c.summary, summarizedThroughSeq: c.summarizedThroughSeq })
+  // A stale caller (summary already advanced by someone else) must not overwrite it.
+  await updateSummary(cid, { history, summary: null, summarizedThroughSeq: 0 })
+  assert.equal((await db.collection('conversations').doc(cid).get()).data().summarizedThroughSeq, c.summarizedThroughSeq)
+  assert.equal((await fake('/__stats')).summary, 2)
+})
+
+await scenario('12. Stop while the Synthesizer call is pending aborts it', async () => {
+  await fake('/__control', { tokenDelayMs: 5, synthDelayMs: 10000 })
+  await makeUser('u12', 'pro', 0); await makePanel('p12', 'u12')
+  const running = runPanelJob('p12')
+  await until(async () => (await panel('p12'))?.rounds?.[0]?.critic, 'critic to finish')
+  await sleep(300) // synthesizer request in flight
+  const t0 = Date.now()
+  assert.deepEqual(await stopPanel('p12', 'u12'), { refunded: false }, 'Pro runs are not counted, so nothing is refunded')
+  await running
+  assert.ok(Date.now() - t0 < 3000, `runner took ${Date.now() - t0}ms to stop`)
+  const p = await panel('p12')
+  assert.equal(p.status, 'error'); assert.equal(p.errorMessage, STOPPED_MESSAGE)
+  assert.equal(p.rounds[0].synthesizer ?? null, null)
 })
 
 for (const r of results) console.log(r.join('  '))

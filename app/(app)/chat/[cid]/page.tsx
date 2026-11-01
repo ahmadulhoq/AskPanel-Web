@@ -1,13 +1,15 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { getSessionUser } from '@/lib/auth'
+import { adminDb } from '@/lib/firebase/admin'
 import { getOwnedConversation, loadMessages } from '@/lib/conversations/store'
+import { DEFAULT_DEBATE_SETTINGS, sanitizeDebateSettings } from '@/lib/conversations/settings'
 import { ConversationView } from '@/components/chat/ConversationView'
 import { Button } from '@/components/ui/button'
 
 interface Props {
   params: Promise<{ cid: string }>
-  searchParams: Promise<{ q?: string; mode?: string }>
+  searchParams: Promise<{ q?: string; mode?: string; persona?: string; rounds?: string }>
 }
 
 export const metadata = { title: 'Chat — AskPanel' }
@@ -20,12 +22,22 @@ export default async function ConversationPage({ params, searchParams }: Props) 
   const conversation = await getOwnedConversation(cid, user.uid)
   if (!conversation) notFound()
 
-  const messages = await loadMessages(cid)
-  const { q, mode } = await searchParams
-  // Only a brand-new conversation accepts a first message from the URL.
-  const pending = q && messages.length === 0
+  const [messages, userSnap] = await Promise.all([
+    loadMessages(cid),
+    adminDb().collection('users').doc(user.uid).get(),
+  ])
+  const userData = userSnap.data()
+  const tier = (userData?.subscription?.tier ?? 'free') as 'free' | 'pro'
+
+  const { q, mode, persona, rounds } = await searchParams
+  // Only a brand-new conversation accepts a first message (and its settings) from the URL.
+  const fresh = !!q && messages.length === 0
+  const pending = fresh
     ? { content: q.slice(0, 4000), mode: mode === 'debate' ? ('debate' as const) : ('reply' as const) }
     : null
+  const settings = fresh && persona
+    ? sanitizeDebateSettings({ persona, maxRounds: Number(rounds) })
+    : conversation.debateSettings ? sanitizeDebateSettings(conversation.debateSettings) : DEFAULT_DEBATE_SETTINGS
 
   return (
     <div className="flex h-dvh flex-col">
@@ -39,7 +51,14 @@ export default async function ConversationPage({ params, searchParams }: Props) 
           <span className="truncate text-sm font-medium">{conversation.title ?? 'New conversation'}</span>
         </div>
       </header>
-      <ConversationView conversationId={cid} initialMessages={messages} pending={pending} />
+      <ConversationView
+        conversationId={cid}
+        initialMessages={messages}
+        pending={pending}
+        tier={tier}
+        initialCustomPersona={userData?.customPersona ?? null}
+        initialSettings={settings}
+      />
     </div>
   )
 }

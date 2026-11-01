@@ -34,16 +34,30 @@ export async function runPanelJob(panelId: string): Promise<void> {
   if (!panel) return
 
   let lost = false
+  const abort = new AbortController()
+  const loseLease = () => {
+    lost = true
+    abort.abort()
+  }
   const heartbeat = setInterval(() => {
     db.runTransaction(async (tx) => {
       const data = (await tx.get(ref)).data() as PanelDoc | undefined
       if (data?.run?.id !== leaseId) {
-        lost = true
+        loseLease()
         return
       }
       tx.update(ref, { 'run.heartbeatAt': Date.now() })
     }).catch((err) => console.error('[runner] heartbeat failed', panelId, err))
   }, HEARTBEAT_MS)
+
+  // Notice right away when the lease is taken from us (Stop clears it) instead of at the
+  // next write, and abort the model request in flight (streaming or not).
+  const unwatch = ref.onSnapshot(
+    (snap) => {
+      if ((snap.data() as PanelDoc | undefined)?.run?.id !== leaseId) loseLease()
+    },
+    (err) => console.error('[runner] lease watch failed', panelId, err),
+  )
 
   let live: { agent: AgentRole; round: number; content: string } | null = null
   let lastFlush = 0
@@ -63,6 +77,7 @@ export async function runPanelJob(panelId: string): Promise<void> {
       customPersona: panel.customPersona ?? undefined,
       rounds: panel.rounds ?? [],
       leaseId,
+      signal: abort.signal,
     })
 
     for await (const event of run) {
@@ -94,11 +109,14 @@ export async function runPanelJob(panelId: string): Promise<void> {
     console.error('[runner] run failed', panelId, err)
   } finally {
     clearInterval(heartbeat)
+    unwatch()
     // Release the lease so a retry or reconnect doesn't have to wait for it to expire.
+    // If the lease was taken (e.g. Stop), still clear live text this runner wrote.
     await db
       .runTransaction(async (tx) => {
         const data = (await tx.get(ref)).data() as PanelDoc | undefined
         if (data?.run?.id === leaseId) tx.update(ref, { run: null, live: null })
+        else if (data?.live?.runId === leaseId) tx.update(ref, { live: null })
       })
       .catch(() => {})
   }
