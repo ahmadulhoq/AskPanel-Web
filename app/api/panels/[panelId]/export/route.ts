@@ -1,7 +1,7 @@
 import { type NextRequest } from 'next/server'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
-import { optionName } from '@/lib/agents/compareState'
+import { isRevised, optionName } from '@/lib/agents/compareState'
 import type { PanelDoc } from '@/types'
 
 // Compare mode: the options, the critique, the revised options (Pro), and the judge's scores.
@@ -9,15 +9,15 @@ function compareLines(panel: PanelDoc): string[] {
   const c = panel.compare
   if (!c) return []
   const lines: string[] = []
-  const revised = c.revisions?.length ? c.revisions : null
+  const revised = isRevised(c)
   c.proposals.forEach((p, i) => {
     lines.push(`## Option ${i + 1}${!revised && c.judgement?.winner === i + 1 ? ' (winner)' : ''}`, '', p.content, '')
   })
   if (c.critic) lines.push('## Critic', '', c.critic.content, '')
-  revised?.forEach((p, i) => {
-    lines.push(`## Option ${i + 1}, revised${c.judgement?.winner === i + 1 ? ' (winner)' : ''}`, '', p.content, '')
+  ;(c.revisions ?? []).forEach((p, i) => {
+    lines.push(`## Option ${i + 1}, revised${revised && c.judgement?.winner === i + 1 ? ' (winner)' : ''}`, '', p.content, '')
   })
-  const final = revised ?? c.proposals
+  const final = revised ? c.revisions! : c.proposals
   if (c.judgement) {
     lines.push('## Judge', '')
     for (const s of c.judgement.scores) {

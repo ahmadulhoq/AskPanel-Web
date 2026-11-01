@@ -8,7 +8,7 @@ import type { PanelState } from '@/types'
 // compare mode the options and the critique, the revised options (Pro, round 2) and the
 // judge's comparison. Shared by the live
 // thread (PanelThread) and the public share page.
-export function ThreadView({ state }: { state: Pick<PanelState, 'status' | 'turns' | 'syntheses' | 'comparison'> }) {
+export function ThreadView({ state }: { state: Pick<PanelState, 'status' | 'turns' | 'syntheses' | 'comparison' | 'verdictPending'> }) {
   const roundNumbers = [...new Set([
     ...state.turns.map(t => t.round),
     ...state.syntheses.map(s => s.round),
@@ -24,8 +24,8 @@ export function ThreadView({ state }: { state: Pick<PanelState, 'status' | 'turn
     }
   }
   const lastRound = roundNumbers.at(-1)
-  const critiqueDone = state.turns.some(t => t.agent === 'critic' && !t.streaming)
-  const judging = compare && critiqueDone && !state.comparison && state.status === 'running' && !state.turns.some(t => t.streaming)
+  // The stream says when the judge starts (after the critique, and after revisions on Pro).
+  const judging = compare && state.verdictPending && !state.comparison && state.status === 'running'
 
   return (
     <>

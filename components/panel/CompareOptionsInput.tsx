@@ -1,10 +1,11 @@
 'use client'
 
 import { Input } from '@/components/ui/input'
+import { MAX_OPTION_CHARS, PROPOSER_COUNT, sanitizeOptions } from '@/lib/agents/compareState'
 
-// Must match MAX_OPTION_CHARS in lib/agents/compareState.ts (the server trims to it).
-const MAX_OPTION_CHARS = 200
 export const EMPTY_OPTIONS = ['', '', '']
+// Stored options back into the three fields.
+export const toFields = (options: string[]) => [...options, ...EMPTY_OPTIONS].slice(0, PROPOSER_COUNT)
 
 // The options to compare (BL-051): two or three, or none to let the panel take them from
 // the question. Sent with the next compare debate only.
@@ -39,8 +40,6 @@ export function CompareOptionsInput({ value, onChange, tier }: {
   )
 }
 
-// The options worth sending: at least two filled in, else none.
-export function filledOptions(value: string[]): string[] | undefined {
-  const filled = value.map((v) => v.trim()).filter(Boolean)
-  return filled.length >= 2 ? filled : undefined
-}
+// The options worth sending — exactly what the server will use (same rules): at least two
+// distinct ones, else none.
+export const filledOptions = (value: string[]): string[] | undefined => sanitizeOptions(value) ?? undefined

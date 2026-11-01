@@ -243,6 +243,8 @@ export interface PanelState {
   turns: AgentTurnState[]
   syntheses: SynthesisState[]
   comparison: CompareJudgement | null
+  // A verdict is being produced (synthesis_start seen, result not yet in).
+  verdictPending: boolean
   finalAnswer: string | null
   confidence: ConfidenceLevel | null
   errorMessage: string | null

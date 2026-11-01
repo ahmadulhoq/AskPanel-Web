@@ -99,7 +99,7 @@ test('compare mode: live proposer text streams, then completes without a second 
 
 test('compare mode: Pro revisions stream as round-2 proposer turns, then the judge', () => {
   const cursor = newCursor()
-  const base = { proposals: [{ content: 'P1' }, { content: 'P2' }], critic: { content: 'C' }, revise: true, judgement: null }
+  const base = { options: ['A', 'B'], proposals: [{ content: 'P1' }, { content: 'P2' }], critic: { content: 'C' }, revise: true, judgement: null }
   const live = { agent: 'proposer' as const, round: 2, index: 0, content: 'R', runId: 'r1' }
   const first = diffPanel(cursor, view({ mode: 'compare', compare: { ...base, revisions: [] }, live }))
   // Round-1 proposer 0 is stored; the live round-2 turn for the same proposer is separate.
@@ -112,4 +112,17 @@ test('compare mode: Pro revisions stream as round-2 proposer turns, then the jud
     compare: { ...base, revisions: [{ content: 'R1' }, { content: 'R2' }], judgement },
   }))
   assert.deepEqual(end.map((e) => e.type + ('round' in e ? `:${e.round}` : '')), ['agent_start:2', 'agent_complete:2', 'synthesis_start:2', 'compare_result', 'panel_complete'])
+})
+
+test('compare mode: the judge shows as weighing only once everything it needs is stored', () => {
+  const cursor = newCursor()
+  const proposals = [{ content: 'P1' }, { content: 'P2' }, { content: 'P3' }]
+  // Pro: the critique is in but revisions are still to come — not the judge's turn yet.
+  const early = diffPanel(cursor, view({ mode: 'compare', compare: { proposals, critic: { content: 'C' }, revise: true, revisions: [], judgement: null } }))
+  assert.equal(early.some((e) => e.type === 'synthesis_start'), false)
+  const ready = diffPanel(cursor, view({ mode: 'compare', compare: { proposals, critic: { content: 'C' }, revise: true, revisions: proposals, judgement: null } }))
+  assert.deepEqual(ready.filter((e) => e.type === 'synthesis_start'), [{ type: 'synthesis_start', round: 2 }])
+  const judgement = { winner: 1, scores: [], reasoning: 'r', confidence: 'high' as const }
+  const end = diffPanel(cursor, view({ mode: 'compare', status: 'complete', finalAnswer: 'A', confidence: 'high', compare: { proposals, critic: { content: 'C' }, revise: true, revisions: proposals, judgement } }))
+  assert.deepEqual(end.map((e) => e.type), ['compare_result', 'panel_complete'], 'no second synthesis_start')
 })

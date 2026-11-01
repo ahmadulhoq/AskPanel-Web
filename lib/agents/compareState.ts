@@ -11,9 +11,11 @@ export const MAX_OPTION_CHARS = 200
 export function sanitizeOptions(input: unknown): string[] | null {
   if (!Array.isArray(input)) return null
   const seen = new Set<string>()
+  // Bounded work on untrusted input: only the first few entries, each cut before the regex.
   const options = input
+    .slice(0, 10)
     .filter((o): o is string => typeof o === 'string')
-    .map((o) => o.replace(/\s+/g, ' ').trim().slice(0, MAX_OPTION_CHARS))
+    .map((o) => o.slice(0, MAX_OPTION_CHARS * 2).replace(/\s+/g, ' ').trim().slice(0, MAX_OPTION_CHARS))
     .filter((o) => o && !seen.has(o.toLowerCase()) && seen.add(o.toLowerCase()))
     .slice(0, PROPOSER_COUNT)
   return options.length >= 2 ? options : null
@@ -42,9 +44,18 @@ export function compareResumePoint(compare: PanelCompare | null | undefined): Co
   return { step: 'judge' }
 }
 
-// The options as the judge sees them: revised versions when there was a revision round.
+// Whether the judge weighs revised options: a revision round ran for every option. The one
+// test used by the runner (judge prompt), the stream (round of the verdict) and the export.
+export const isRevised = (compare: PanelCompare | null | undefined) =>
+  !!compare?.revise && (compare.revisions?.length ?? 0) >= proposerCount(compare)
+
+// The options as the judge sees them: the revised versions when there was a revision round.
 export const finalProposals = (compare: PanelCompare) =>
-  (compare.revise && compare.revisions?.length ? compare.revisions : compare.proposals).map((p) => p.content)
+  (isRevised(compare) ? compare.revisions! : compare.proposals).map((p) => p.content)
+
+// Everything the judge needs is stored (it is weighing, or about to).
+export const readyForJudge = (compare: PanelCompare | null | undefined) =>
+  !!compare?.critic && (compare.proposals?.length ?? 0) >= proposerCount(compare) && (!compare.revise || isRevised(compare))
 
 // A proposal's short name: its first markdown heading, without a leading "Option:" label.
 export function optionName(content: string, fallback: string): string {

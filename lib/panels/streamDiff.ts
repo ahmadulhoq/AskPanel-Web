@@ -1,3 +1,4 @@
+import { isRevised, readyForJudge } from '../agents/compareState.ts'
 import type { AgentRole, PanelDoc, SSEEvent } from '@/types'
 
 export type PanelView = Pick<PanelDoc, 'status' | 'rounds' | 'finalAnswer' | 'confidence' | 'errorMessage' | 'live'>
@@ -106,9 +107,15 @@ function diffCompare(cursor: StreamCursor, panel: PanelView): SSEEvent[] {
     if (wasLive) cursor.live = null
   }
 
+  // The judge's turn: synthesis_start as soon as it has everything (so viewers can show it
+  // weighing — not earlier, e.g. while revisions are still to come), then its result.
   const judgement = compare?.judgement
+  const round = isRevised(compare) ? 2 : 1
+  if ((judgement || (panel.status === 'running' && readyForJudge(compare))) && !cursor.emitted.has('judging')) {
+    events.push({ type: 'synthesis_start', round })
+    cursor.emitted.add('judging')
+  }
   if (judgement && !cursor.emitted.has('judge')) {
-    events.push({ type: 'synthesis_start', round: compare?.revisions?.length ? 2 : 1 })
     events.push({ type: 'compare_result', ...judgement })
     cursor.emitted.add('judge')
   }

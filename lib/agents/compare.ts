@@ -2,7 +2,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { DEFAULT_MODEL } from '@/lib/anthropic'
 import { leasedUpdate, LeaseLostError, requestToolCall, streamAgent } from './orchestrator'
 import { buildCompareCriticPrompt, buildJudgePrompt, buildProposerPrompt, buildRevisionPrompt, JUDGE_TOOL } from './comparePrompts'
-import { compareResumePoint, emptyCompare, finalProposals, parseJudgement, proposerCount } from './compareState'
+import { compareResumePoint, emptyCompare, finalProposals, isRevised, parseJudgement, proposerCount } from './compareState'
 import type { AgentPrompt } from './prompts'
 import type { OrchestratorInput, SSEGenerator } from './types'
 import type { SSEEvent } from '@/types'
@@ -78,8 +78,9 @@ export async function* runCompare(input: OrchestratorInput): SSEGenerator {
     }
 
     // ── Judge (tool_use, like the Synthesizer) ───────────────────────
-    const revised = !!stored.revise
-    const judged = finalProposals({ ...stored, proposals: proposals.map((content) => ({ content })), revisions: revisions.map((content) => ({ content })) })
+    const now = { ...stored, proposals: proposals.map((content) => ({ content })), revisions: revisions.map((content) => ({ content })), critic: { content: critique } }
+    const revised = isRevised(now)
+    const judged = finalProposals(now)
     yield { type: 'synthesis_start', round: revised ? 2 : 1 } satisfies SSEEvent
     const prompt = buildJudgePrompt(question, judged, critique, context, revised)
     const { input: toolInput, stopReason } = await requestToolCall(prompt, model, JUDGE_TOOL, signal)

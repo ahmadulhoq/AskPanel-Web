@@ -42,6 +42,7 @@ test('sanitizeOptions: 2–3 distinct, trimmed options, or none', () => {
   assert.equal(sanitizeOptions(['A', '   ']), null)
   assert.equal(sanitizeOptions('A, B'), null)
   assert.equal(sanitizeOptions(['x'.repeat(500), 'B'])![0].length, 200)
+  assert.equal(sanitizeOptions([...Array(1000).fill(''), 'A', 'B']), null, 'only the first entries are looked at')
 })
 
 test('user options set the proposer count; revisions come after the critic', () => {

@@ -21,10 +21,18 @@ export function takePendingContext(cid: string): PendingExtras {
   try {
     const raw = sessionStorage.getItem(key(cid))
     sessionStorage.removeItem(key(cid))
-    const parsed = raw ? (JSON.parse(raw) as Partial<PendingExtras>) : {}
+    if (!raw) return { context: '' }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      return { context: raw } // stashed as plain text by an earlier version
+    }
+    if (!parsed || typeof parsed !== 'object') return { context: raw }
+    const o = parsed as Partial<PendingExtras>
     return {
-      context: typeof parsed.context === 'string' ? parsed.context : '',
-      options: Array.isArray(parsed.options) ? parsed.options.filter((o): o is string => typeof o === 'string') : undefined,
+      context: typeof o.context === 'string' ? o.context : '',
+      options: Array.isArray(o.options) ? o.options.filter((x): x is string => typeof x === 'string') : undefined,
     }
   } catch {
     return { context: '' }
