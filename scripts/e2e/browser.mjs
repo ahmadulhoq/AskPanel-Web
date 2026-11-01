@@ -29,26 +29,6 @@ async function sessionCookie() {
   return { cookie: cookie.split(';')[0].slice('__session='.length), uid: localId }
 }
 
-// Older panels for this user, written straight to the Firestore emulator (the "owner"
-// token bypasses security rules), so the dashboard has more than one page.
-const SEEDED = 22
-async function seedPanels(uid) {
-  const base = Date.now() - 86_400_000
-  for (let i = 0; i < SEEDED; i++) {
-    const res = await fetch(`http://${process.env.FIRESTORE_EMULATOR_HOST}/v1/projects/${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}/databases/(default)/documents/panels?documentId=seed-${i}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: 'Bearer owner' },
-      body: JSON.stringify({ fields: {
-        userId: { stringValue: uid }, question: { stringValue: `Seeded question ${i}` }, title: { nullValue: null },
-        persona: { stringValue: 'general' }, status: { stringValue: 'complete' }, isPublic: { booleanValue: false },
-        parentPanelId: { nullValue: null }, confidence: { stringValue: 'medium' },
-        createdAt: { timestampValue: new Date(base + i * 1000).toISOString() },
-      } }),
-    })
-    if (!res.ok) throw new Error(`seeding panel ${i} failed (${res.status})`)
-  }
-}
-
 const FIRESTORE = `http://${process.env.FIRESTORE_EMULATOR_HOST}/v1/projects/${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}/databases/(default)/documents`
 const OWNER = { authorization: 'Bearer owner', 'content-type': 'application/json' }
 async function makePro(uid) {
@@ -57,6 +37,38 @@ async function makePro(uid) {
   })
   if (!res.ok) throw new Error(`could not make the user Pro (${res.status})`)
 }
+const ts = (ms) => ({ timestampValue: new Date(ms).toISOString() })
+async function seed(path, id, fields) {
+  const res = await fetch(`${FIRESTORE}/${path}?documentId=${id}`, { method: 'POST', headers: OWNER, body: JSON.stringify({ fields }) })
+  if (!res.ok) throw new Error(`seeding ${path}/${id} failed (${res.status})`)
+}
+// Older conversations, so the dashboard list has more than one page (30 per page).
+const SEEDED_CONVERSATIONS = 32
+async function seedConversations(uid) {
+  const base = Date.now() - 3 * 86_400_000
+  for (let i = 0; i < SEEDED_CONVERSATIONS; i++) {
+    await seed('conversations', `seed-${i}`, {
+      userId: { stringValue: uid }, title: { stringValue: `Seeded conversation ${i}` }, debateCount: { integerValue: '0' },
+      createdAt: ts(base + i * 1000), updatedAt: ts(base + i * 1000),
+    })
+  }
+}
+// v1 panels as they were before conversations existed (no conversationId field): a
+// follow-up chain and a standalone one. The first dashboard visit migrates them.
+async function seedV1Panels(uid) {
+  const base = Date.now() - 86_400_000
+  const panel = (question, title, parent, at) => ({
+    userId: { stringValue: uid }, question: { stringValue: question }, title: { stringValue: title },
+    persona: { stringValue: 'general' }, status: { stringValue: 'complete' }, isPublic: { booleanValue: true },
+    parentPanelId: parent ? { stringValue: parent } : { nullValue: null }, confidence: { stringValue: 'high' },
+    finalAnswer: { stringValue: `## Verdict for ${title}\n\nA stored v1 answer.` }, rounds: { arrayValue: {} },
+    config: { mapValue: { fields: { maxRounds: { integerValue: '2' }, model: { stringValue: 'claude-sonnet-4-5' } } } },
+    createdAt: ts(at), completedAt: ts(at),
+  })
+  await seed('panels', 'v1root', panel('Should we expand to Europe next year?', 'Expanding to Europe', null, base))
+  await seed('panels', 'v1follow', panel('Which country first, Germany or France?', 'Germany or France', 'v1root', base + 60_000))
+  await seed('panels', 'v1alone', panel('Is a four-day week right for our team?', 'Four-day week', null, base + 120_000))
+}
 async function routingEvents(uid) {
   const res = await fetch(`${FIRESTORE}/routingEvents?pageSize=300`, { headers: OWNER })
   const { documents = [] } = await res.json()
@@ -64,7 +76,8 @@ async function routingEvents(uid) {
 }
 
 const { cookie, uid } = await sessionCookie()
-await seedPanels(uid)
+await seedConversations(uid)
+await seedV1Panels(uid)
 const results = []
 const check = (name, ok, detail = '') => results.push([ok ? 'PASS' : 'FAIL', name, detail])
 const browser = await chromium.launch()
@@ -87,21 +100,38 @@ const scrollState = () => onScroller('read')
 const toTop = () => onScroller('top')
 
 try {
-  // ── v1 panel flow: streaming markdown + scroll-follow ─────────────────
+  // ── Dashboard: v1 panels migrated into conversations ──────────────────
   await fake('/__control', { tokenDelayMs: 90 })
   await page.goto(BASE + '/dashboard')
   await page.screenshot({ path: `${SHOTS}/1-dashboard.png` })
   const font = await page.evaluate(() => getComputedStyle(document.body).fontFamily)
   check('app renders in Geist, not the browser default serif', /geist/i.test(font), font)
+  const migrated = page.locator('a[href="/chat/v1-v1root"]')
+  check('v1 panels show up as conversations (a follow-up chain is one conversation)',
+    await migrated.count() === 1 && /Expanding to Europe/.test(await migrated.innerText()) && /\b2\b/.test(await migrated.innerText())
+      && await page.locator('a[href="/chat/v1-v1alone"]').count() === 1, await migrated.innerText().catch(() => ''))
+  await migrated.click()
+  await page.getByText('Panel verdict').nth(1).waitFor({ timeout: 15000 })
+  const order = await page.evaluate(() => document.body.innerText.indexOf('expand to Europe') < document.body.innerText.indexOf('Germany or France'))
+  check('a migrated conversation shows its debates in order', order && await page.getByRole('heading', { name: 'Verdict for Germany or France' }).count() === 1)
+  await page.goto(BASE + '/p/v1root')
+  check('a v1 share link still works', await page.getByRole('heading', { name: 'Verdict for Expanding to Europe' }).isVisible())
+
+  // ── Composer settings: a locked Pro control opens the paywall ─────────
+  await page.goto(BASE + '/dashboard')
+  await page.getByTitle('Debate panel settings').click()
   await page.getByRole('button', { name: 'Custom', exact: true }).click()
   const paywallTitle = await page.getByRole('dialog').getByRole('heading').first().textContent({ timeout: 5000 })
   check('a locked Pro control opens the paywall as a feature lock, not "out of runs"', /Pro feature/.test(paywallTitle ?? ''), paywallTitle)
   await page.getByRole('button', { name: 'Maybe later' }).click()
   await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 5000 })
+  await page.getByTitle('Debate panel settings').click()
+
+  // ── A debate from the dashboard: streaming markdown + scroll-follow ───
   await page.locator('textarea').first().fill('Should we raise a seed round now or wait six months?')
-  await page.keyboard.press('Enter')
-  await page.waitForURL(/\/panel\//, { timeout: 15000 })
-  const panelUrl = page.url()
+  await page.getByRole('button', { name: 'Debate', exact: true }).click()
+  await page.waitForURL(/\/chat\/[^/?]+$/, { timeout: 15000 })
+  const firstConvoUrl = page.url()
   await page.getByText('Respondent', { exact: true }).first().waitFor({ timeout: 20000 })
   await page.getByText('critic view').first().waitFor({ timeout: 30000 }) // critic is now streaming
   await toTop()
@@ -111,6 +141,7 @@ try {
   check('reader who scrolled up is not yanked down while text streams', after && after.top < 50, JSON.stringify({ before, after }))
   check('"scroll to latest" button appears when scrolled up', await page.getByLabel('Scroll to latest').isVisible())
   await page.getByText('Panel Answer').waitFor({ timeout: 60000 })
+  const panelUrl = `${BASE}/panel/${await page.locator('[data-panel-id]').first().getAttribute('data-panel-id')}`
   await page.getByLabel('Scroll to latest').click().catch(() => {})
   await page.waitForTimeout(800)
   await page.screenshot({ path: `${SHOTS}/2-panel-complete.png` })
@@ -132,7 +163,7 @@ try {
   // ── v2 chat: quick reply, Debate this, Debate button, leave mid-debate ─
   await fake('/__control', { tokenDelayMs: 40 })
   await page.goto(BASE + '/chat')
-  await page.screenshot({ path: `${SHOTS}/3-chat-list.png` })
+  check('/chat now leads to the dashboard', /\/dashboard$/.test(page.url()), page.url())
   await page.locator('textarea').fill('Help me plan the launch of our product next month')
   await page.keyboard.press('Enter')
   await page.waitForURL(/\/chat\/[^/?]+$/, { timeout: 15000 })
@@ -199,22 +230,26 @@ try {
   // ── Compare options ───────────────────────────────────────────────────
   await fake('/__control', { tokenDelayMs: 10 })
   await page.goto(BASE + '/dashboard')
+  await page.getByTitle('Debate panel settings').click()
   await page.getByRole('radio', { name: 'Compare options' }).click()
   check('compare mode hides the rounds picker', await page.getByText('Debate rounds').count() === 0)
+  await page.getByTitle('Debate panel settings').click()
   await page.locator('textarea').first().fill('Bootstrap for a year, raise a seed round, or take a loan?')
-  await page.keyboard.press('Enter')
-  await page.waitForURL(/\/panel\//, { timeout: 15000 })
-  const compareUrl = page.url()
+  await page.getByRole('button', { name: 'Debate', exact: true }).click()
+  await page.waitForURL(/\/chat\/[^/?]+$/, { timeout: 15000 })
   await page.getByText('Option 2 wins').waitFor({ timeout: 60000 })
+  const compareUrl = `${BASE}/panel/${await page.locator('[data-panel-id]').first().getAttribute('data-panel-id')}`
   const optionLabels = await page.getByText(/^Option [123]$/).count()
   check('compare mode: three options, a winner, and the judge\'s answer',
     optionLabels === 3 && await page.getByText('Winner', { exact: true }).count() === 1 && await page.getByRole('heading', { name: 'Go with Plan B' }).count() === 1,
     `option labels: ${optionLabels}`)
   await page.getByText('Option 2 wins').scrollIntoViewIfNeeded()
   await page.screenshot({ path: `${SHOTS}/11-compare.png` })
-  await page.goto(compareUrl.replace('/panel/', '/p/'))
-  check('a shared compare panel shows the options and the winner',
-    await page.getByText('Option 2 wins').isVisible() && await page.getByText(/^Option [123]$/).count() === 3)
+  await page.goto(compareUrl)
+  await page.getByText('Option 2 wins').waitFor({ timeout: 15000 }).catch(() => {})
+  check('the full transcript page shows the options and the winner',
+    await page.getByText('Option 2 wins').isVisible() && await page.getByText(/^Option [123]$/).count() === 3
+      && await page.getByText('Continue in the conversation →').isVisible())
 
   // ── Coordinator: the assistant decides when to convene the panel ─────
   await fake('/__control', { tokenDelayMs: 10 })
@@ -279,25 +314,27 @@ try {
   check('terms render', await page.getByRole('heading', { name: 'Terms of service' }).isVisible())
 
   await page.goto(BASE + '/dashboard')
-  const panelLinks = page.locator('main a[href^="/panel/"]')
-  const firstPage = await panelLinks.count()
+  const conversationLinks = page.locator('main a[href^="/chat/"]')
+  const firstPage = await conversationLinks.count()
   await page.getByRole('button', { name: 'Show more' }).click()
-  await page.getByText(`Seeded question 0`).waitFor({ timeout: 10000 })
-  const allPanels = await panelLinks.count()
-  check('dashboard shows 20 panels, then the rest on "Show more"',
-    firstPage === 20 && allPanels > 20 && await page.getByRole('button', { name: 'Show more' }).count() === 0, `${firstPage} → ${allPanels}`)
+  await page.getByText('Seeded conversation 0', { exact: true }).waitFor({ timeout: 10000 })
+  const allConversations = await conversationLinks.count()
+  check('dashboard lists 30 conversations, then the rest on "Show more"',
+    firstPage === 30 && allConversations > 30 && await page.getByRole('button', { name: 'Show more' }).count() === 0, `${firstPage} → ${allConversations}`)
+  await page.getByPlaceholder('Search conversations…').fill('Europe')
+  check('searching narrows the list', await conversationLinks.count() === 1)
 
+  const panelId = new URL(panelUrl).pathname.split('/').pop()
   await page.goto(panelUrl)
   await page.getByRole('button', { name: 'Delete panel' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click()
-  await page.waitForURL(/\/dashboard$/, { timeout: 10000 })
-  const panelPath = new URL(panelUrl).pathname
-  check('a panel can be deleted', await page.locator(`a[href="${panelPath}"]`).count() === 0)
+  await page.waitForURL(firstConvoUrl, { timeout: 10000 })
+  check('a panel can be deleted (and leaves its conversation)', await page.locator(`[data-panel-id="${panelId}"]`).count() === 0)
 
   await page.goto(convoUrl)
   await page.getByRole('button', { name: 'Delete conversation' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click()
-  await page.waitForURL(/\/chat$/, { timeout: 10000 })
+  await page.waitForURL(/\/dashboard$/, { timeout: 10000 })
   check('a conversation can be deleted', await page.locator(`a[href="${new URL(convoUrl).pathname}"]`).count() === 0)
 
   await page.goto(BASE + '/account')

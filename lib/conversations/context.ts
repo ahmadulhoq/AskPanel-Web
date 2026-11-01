@@ -1,6 +1,8 @@
 import type { MessageView } from '@/types'
 
-export type ContextMessage = Pick<MessageView, 'role' | 'kind' | 'content' | 'status' | 'debate'>
+export type ContextMessage = Pick<MessageView, 'role' | 'kind' | 'content' | 'status' | 'debate'> & { context?: string | null }
+
+const attached = (m: ContextMessage) => (m.role === 'user' && m.context?.trim() ? `\n\n[Context the user attached]\n${m.context.trim()}` : '')
 export type SeqMessage = ContextMessage & Pick<MessageView, 'seq'>
 
 interface ModelMessage {
@@ -37,7 +39,7 @@ function render(m: ContextMessage): string | null {
   }
   if (m.kind === 'debate_proposal') return '[Suggested running the panel on this — the user has not run it]'
   if (m.role === 'assistant' && m.status === 'error') return null
-  return m.content.trim() || null
+  return m.content.trim() ? m.content.trim() + attached(m) : null
 }
 
 const summaryBlock = (summary: string) => `[Summary of the earlier conversation]\n${summary.trim()}`
@@ -119,7 +121,7 @@ export function transcriptLine(m: ContextMessage): string | null {
       ? `Panel verdict (confidence: ${m.debate.confidence ?? 'unknown'}): ${m.debate.finalAnswer}`
       : null
   }
-  if (m.role === 'user') return m.content.trim() ? `User: ${m.content.trim()}` : null
+  if (m.role === 'user') return m.content.trim() ? `User: ${m.content.trim()}${attached(m)}` : null
   return m.status === 'complete' && m.content.trim() ? `Assistant: ${m.content.trim()}` : null
 }
 

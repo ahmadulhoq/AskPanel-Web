@@ -1,3 +1,4 @@
+import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { stopPanel, StopRejected } from './stop'
 import type { PanelDoc } from '@/types'
@@ -15,7 +16,9 @@ export async function deletePanel(panelId: string, uid: string): Promise<boolean
   const batch = db.batch()
   batch.delete(ref)
   if (panel.conversationId && panel.messageId) {
-    batch.delete(db.collection('conversations').doc(panel.conversationId).collection('messages').doc(panel.messageId))
+    const conversation = db.collection('conversations').doc(panel.conversationId)
+    batch.delete(conversation.collection('messages').doc(panel.messageId))
+    batch.update(conversation, { debateCount: FieldValue.increment(-1) })
   }
   await batch.commit()
   return true

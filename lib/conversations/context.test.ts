@@ -143,3 +143,9 @@ test('an open debate proposal is described to the model, not dropped', () => {
   assert.match(msgs[1].content, /not run it/)
 })
 
+test('context the user attached travels with their message', () => {
+  const withContext: ContextMessage = { ...user('Review my pitch'), context: 'Deck: 12 slides, seed round.' }
+  assert.match(toModelMessages([withContext])[0].content, /Review my pitch\n\n\[Context the user attached\]\nDeck: 12 slides/)
+  assert.match(debateContext([withContext])!, /User: Review my pitch[\s\S]*Deck: 12 slides/)
+})
+

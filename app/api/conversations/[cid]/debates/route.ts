@@ -77,7 +77,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   const batch = adminDb().batch()
   batch.set(assistantRef, { ...message, createdAt: FieldValue.serverTimestamp() })
-  batch.update(conversationRef(cid), { updatedAt: FieldValue.serverTimestamp(), ...settingsUpdate })
+  batch.update(conversationRef(cid), { updatedAt: FieldValue.serverTimestamp(), debateCount: FieldValue.increment(1), ...settingsUpdate })
   await batch.commit()
   logRouting(user.uid, cid, history[replyIndex].id, 'debate_this', debateSettings.mode)
 

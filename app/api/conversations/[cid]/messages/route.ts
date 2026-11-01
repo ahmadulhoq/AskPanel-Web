@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
-import { createPanel } from '@/lib/panels/create'
+import { createPanel, MAX_CONTEXT_CHARS } from '@/lib/panels/create'
 import { stopIfRunning } from '@/lib/panels/delete'
 import { panelErrorResponse } from '@/lib/panels/errors'
 import { FreeLimitReachedError } from '@/lib/billing/runs'
@@ -38,6 +38,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const body = await request.json().catch(() => ({}))
   const content = typeof body.content === 'string' ? body.content.trim() : ''
+  // Context attached to this message (pasted, or extracted from a link or file).
+  const attachedContext = typeof body.context === 'string' && body.context.trim()
+    ? body.context.trim().slice(0, MAX_CONTEXT_CHARS)
+    : null
   const mode = body.mode === 'debate' ? 'debate' : 'reply'
   // Remembered on the conversation so the composer reopens with the same panel.
   const debateSettings = sanitizeDebateSettings(body.settings)
@@ -57,7 +61,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const seq = nextSeq(history)
   const userRef = messagesRef(cid).doc()
   const assistantRef = messagesRef(cid).doc()
-  const userMessage: NewMessage = { role: 'user', kind: 'text', content, panelId: null, status: 'complete', seq }
+  const userMessage: NewMessage = {
+    role: 'user', kind: 'text', content, panelId: null, status: 'complete', seq, ...(attachedContext ? { context: attachedContext } : {}),
+  }
+  // A debate's brief: the attached context first, then the conversation so far.
+  const debateBrief = () => [attachedContext, debateContext(unsummarized, undefined, summary)].filter(Boolean).join('\n\n') || null
   const created = { createdAt: FieldValue.serverTimestamp() }
   const isFirstMessage = history.length === 0 && !conversation.title
 
@@ -71,7 +79,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         persona: debateSettings.persona,
         maxRounds: debateSettings.maxRounds,
         mode: debateSettings.mode,
-        userContext: debateContext(unsummarized, undefined, summary),
+        userContext: debateBrief(),
         conversationId: cid,
         messageId: assistantRef.id,
       })
@@ -84,7 +92,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const batch = adminDb().batch()
     batch.set(userRef, { ...userMessage, ...created })
     batch.set(assistantRef, { ...assistantMessage, ...created })
-    batch.update(conversationRef(cid), { updatedAt: FieldValue.serverTimestamp(), ...settingsUpdate })
+    batch.update(conversationRef(cid), { updatedAt: FieldValue.serverTimestamp(), debateCount: FieldValue.increment(1), ...settingsUpdate })
     await batch.commit()
     if (isFirstMessage) titleConversation(cid, content)
     logRouting(user.uid, cid, assistantRef.id, 'debate_button', debateSettings.mode)
@@ -124,7 +132,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   await batch.commit()
 
   const userView = toMessageView(userRef.id, userMessage)
-  const brief = () => debateContext(unsummarized, undefined, summary)
+  const brief = debateBrief
 
   // The coordinator (spec §4): the reply model may send the message to the panel. Pro
   // starts the debate; free gets a proposal to run it or not (the tier rule is enforced
@@ -146,6 +154,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const debate: NewMessage = { ...assistantMessage, kind: 'debate', content: '', panelId, status: 'complete', routing }
         try {
           await assistantRef.update({ kind: 'debate', content: '', panelId, status: 'complete', routing })
+          await conversationRef(cid).update({ debateCount: FieldValue.increment(1) }).catch(() => {})
         } catch (err) {
           // Don't leave a debate running that the conversation can't show.
           await stopIfRunning(panelId, user.uid).catch(() => {})

@@ -56,7 +56,7 @@ export function AuthForm() {
         <CardDescription>
           {mode === 'signin'
             ? 'Welcome back to AskPanel'
-            : 'Start with 5 free panel runs'}
+            : 'Start with 5 free debates'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

@@ -7,7 +7,7 @@ import { sanitizeDebateSettings } from '@/lib/conversations/settings'
 import { logRouting } from '@/lib/conversations/routingLog'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
-import { getOwnedConversation, loadMessages, messagesRef, toMessageView } from '@/lib/conversations/store'
+import { conversationRef, getOwnedConversation, loadMessages, messagesRef, toMessageView } from '@/lib/conversations/store'
 import type { NewMessage } from '@/lib/conversations/store'
 
 // "Run the panel" on a debate the assistant proposed (free tier, spec §3.2).
@@ -61,6 +61,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   await ref.update({ kind: 'debate', panelId, claimedAt: FieldValue.delete() })
+  await conversationRef(cid).update({ debateCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }).catch(() => {})
   logRouting(user.uid, cid, mid, 'run_proposal', proposal.routing.mode)
   const message: NewMessage = {
     role: 'assistant', kind: 'debate', content: '', panelId, status: 'complete', seq: proposal.seq, routing: proposal.routing,

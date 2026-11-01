@@ -26,7 +26,7 @@ export default function LandingPage() {
         </p>
         <div className="mt-8 flex gap-3">
           <Link href="/login">
-            <Button size="lg">Try free — 5 runs included</Button>
+            <Button size="lg">Try free — 5 debates included</Button>
           </Link>
         </div>
       </section>
