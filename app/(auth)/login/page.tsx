@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { AuthForm } from '@/components/auth/AuthForm'
 
 export const metadata = { title: 'Sign in — AskPanel' }
@@ -13,6 +14,11 @@ export default function LoginPage() {
           </p>
         </div>
         <AuthForm />
+        <p className="text-center text-xs text-muted-foreground">
+          By continuing you agree to the{' '}
+          <Link href="/terms" className="underline underline-offset-4 hover:text-foreground">Terms</Link> and{' '}
+          <Link href="/privacy" className="underline underline-offset-4 hover:text-foreground">Privacy policy</Link>.
+        </p>
       </div>
     </main>
   )

@@ -5,6 +5,7 @@ import { DEFAULT_MODEL } from '@/lib/anthropic'
 import { PERSONA_MAP } from '@/lib/agents/personas'
 import { runPanelJob } from '@/lib/agents/runner'
 import { reserveRun } from '@/lib/billing/runs'
+import { limitInTransaction } from '@/lib/limits/rateLimit'
 
 export const MAX_CONTEXT_CHARS = 4000
 
@@ -21,7 +22,8 @@ export interface CreatePanelInput {
 }
 
 // Creates a debate panel and starts its run. Throws FreeLimitReachedError when a free user
-// is out of runs. Used by the panel composer and by conversations.
+// is out of runs, RateLimitedError when debates are started too fast. Used by the panel
+// composer and by conversations.
 export async function createPanel(input: CreatePanelInput): Promise<string> {
   const { uid, question } = input
   const db = adminDb()
@@ -52,7 +54,9 @@ export async function createPanel(input: CreatePanelInput): Promise<string> {
 
   const panelId = nanoid(12)
   await db.runTransaction(async (tx) => {
+    const countDebate = await limitInTransaction(tx, 'debate', uid)
     const { tier, counted, userData } = await reserveRun(tx, userRef, Date.now())
+    countDebate()
 
     // Free → max 2 rounds, Pro → max 3.
     const limit = tier === 'pro' ? 3 : 2

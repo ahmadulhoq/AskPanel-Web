@@ -2,9 +2,10 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createSessionCookie, SESSION_COOKIE_NAME, SESSION_DURATION_MS } from '@/lib/auth'
 import { adminDb, adminAuth } from '@/lib/firebase/admin'
 import { FieldValue } from 'firebase-admin/firestore'
+import { limitResponse } from '@/lib/limits/rateLimit'
 
 export async function POST(request: NextRequest) {
-  const { idToken } = await request.json()
+  const { idToken } = await request.json().catch(() => ({}))
   if (!idToken) {
     return NextResponse.json({ error: 'Missing idToken' }, { status: 400 })
   }
@@ -15,6 +16,9 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
   }
+
+  const limited = await limitResponse('session', decodedToken.uid)
+  if (limited) return limited
 
   const sessionCookie = await createSessionCookie(idToken)
 

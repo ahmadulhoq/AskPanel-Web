@@ -19,17 +19,38 @@ async function sessionCookie() {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ email: `e2e-${randomUUID()}@example.com`, password: randomUUID(), returnSecureToken: true }),
   })
-  const { idToken } = await signUp.json()
+  const { idToken, localId } = await signUp.json()
   if (!idToken) throw new Error(`auth emulator sign-up failed (${signUp.status})`)
   const res = await fetch(BASE + '/api/auth/session', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idToken }),
   })
   const cookie = res.headers.getSetCookie().find((c) => c.startsWith('__session='))
   if (!cookie) throw new Error(`no session cookie from /api/auth/session (${res.status})`)
-  return cookie.split(';')[0].slice('__session='.length)
+  return { cookie: cookie.split(';')[0].slice('__session='.length), uid: localId }
 }
 
-const cookie = await sessionCookie()
+// Older panels for this user, written straight to the Firestore emulator (the "owner"
+// token bypasses security rules), so the dashboard has more than one page.
+const SEEDED = 22
+async function seedPanels(uid) {
+  const base = Date.now() - 86_400_000
+  for (let i = 0; i < SEEDED; i++) {
+    const res = await fetch(`http://${process.env.FIRESTORE_EMULATOR_HOST}/v1/projects/${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}/databases/(default)/documents/panels?documentId=seed-${i}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer owner' },
+      body: JSON.stringify({ fields: {
+        userId: { stringValue: uid }, question: { stringValue: `Seeded question ${i}` }, title: { nullValue: null },
+        persona: { stringValue: 'general' }, status: { stringValue: 'complete' }, isPublic: { booleanValue: false },
+        parentPanelId: { nullValue: null }, confidence: { stringValue: 'medium' },
+        createdAt: { timestampValue: new Date(base + i * 1000).toISOString() },
+      } }),
+    })
+    if (!res.ok) throw new Error(`seeding panel ${i} failed (${res.status})`)
+  }
+}
+
+const { cookie, uid } = await sessionCookie()
+await seedPanels(uid)
 const results = []
 const check = (name, ok, detail = '') => results.push([ok ? 'PASS' : 'FAIL', name, detail])
 const browser = await chromium.launch()
@@ -64,6 +85,7 @@ try {
   await page.locator('textarea').first().fill('Should we raise a seed round now or wait six months?')
   await page.keyboard.press('Enter')
   await page.waitForURL(/\/panel\//, { timeout: 15000 })
+  const panelUrl = page.url()
   await page.getByText('Respondent', { exact: true }).first().waitFor({ timeout: 20000 })
   await page.getByText('critic view').first().waitFor({ timeout: 30000 }) // critic is now streaming
   await toTop()
@@ -156,6 +178,49 @@ try {
   await page.screenshot({ path: `${SHOTS}/8-chat-mobile.png` })
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)
   check('no horizontal overflow at phone width', !overflow)
+  await page.setViewportSize({ width: 1280, height: 650 })
+
+  // ── Launch basics: legal pages, paging, deletion ─────────────────────
+  await page.goto(BASE + '/')
+  check('landing page links to the privacy policy and terms',
+    await page.getByRole('link', { name: 'Privacy' }).count() === 1 && await page.getByRole('link', { name: 'Terms' }).count() === 1)
+  await page.goto(BASE + '/privacy')
+  check('privacy policy renders', await page.getByRole('heading', { name: 'Privacy policy' }).isVisible())
+  await page.screenshot({ path: `${SHOTS}/9-privacy.png` })
+  await page.goto(BASE + '/terms')
+  check('terms render', await page.getByRole('heading', { name: 'Terms of service' }).isVisible())
+
+  await page.goto(BASE + '/dashboard')
+  const panelLinks = page.locator('main a[href^="/panel/"]')
+  const firstPage = await panelLinks.count()
+  await page.getByRole('button', { name: 'Show more' }).click()
+  await page.getByText(`Seeded question 0`).waitFor({ timeout: 10000 })
+  const allPanels = await panelLinks.count()
+  check('dashboard shows 20 panels, then the rest on "Show more"',
+    firstPage === 20 && allPanels > 20 && await page.getByRole('button', { name: 'Show more' }).count() === 0, `${firstPage} → ${allPanels}`)
+
+  await page.goto(panelUrl)
+  await page.getByRole('button', { name: 'Delete panel' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click()
+  await page.waitForURL(/\/dashboard$/, { timeout: 10000 })
+  const panelPath = new URL(panelUrl).pathname
+  check('a panel can be deleted', await page.locator(`a[href="${panelPath}"]`).count() === 0)
+
+  await page.goto(convoUrl)
+  await page.getByRole('button', { name: 'Delete conversation' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click()
+  await page.waitForURL(/\/chat$/, { timeout: 10000 })
+  check('a conversation can be deleted', await page.locator(`a[href="${new URL(convoUrl).pathname}"]`).count() === 0)
+
+  await page.goto(BASE + '/account')
+  await page.getByRole('button', { name: 'Delete account' }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('textbox').fill('DELETE')
+  await page.screenshot({ path: `${SHOTS}/10-delete-account.png` })
+  await dialog.getByRole('button', { name: 'Delete account' }).click()
+  await page.waitForURL(BASE + '/', { timeout: 15000 })
+  await page.goto(BASE + '/dashboard')
+  check('deleting the account signs you out', /\/login/.test(page.url()), page.url())
 } catch (e) {
   check('script ran to completion', false, e.message.split('\n')[0])
   await page.screenshot({ path: `${SHOTS}/error.png` }).catch(() => {})

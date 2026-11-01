@@ -20,6 +20,11 @@ const { STOPPED_MESSAGE } = await imp('lib/panels/constants.ts')
 const { createPanel } = await imp('lib/panels/create.ts')
 const { updateSummary } = await imp('lib/conversations/summary.ts')
 const { loadMessages } = await imp('lib/conversations/store.ts')
+const { rateLimit, RateLimitedError, LIMITS } = await imp('lib/limits/rateLimit.ts')
+const { deletePanel } = await imp('lib/panels/delete.ts')
+const { deleteAccount } = await imp('lib/account/delete.ts')
+const { listPanels, PANEL_PAGE_SIZE } = await imp('lib/panels/list.ts')
+const { adminAuth } = await imp('lib/firebase/admin.ts')
 const { Timestamp } = await import(pathToFileURL(createRequire(path.join(ROOT, 'package.json')).resolve('firebase-admin/firestore')).href)
 
 const db = adminDb()
@@ -232,6 +237,71 @@ await scenario('12. Stop while the Synthesizer call is pending aborts it', async
   const p = await panel('p12')
   assert.equal(p.status, 'error'); assert.equal(p.errorMessage, STOPPED_MESSAGE)
   assert.equal(p.rounds[0].synthesizer ?? null, null)
+})
+
+await scenario('13. rate limits: the 21st reply in a minute is refused; failed debate attempts are not counted', async () => {
+  for (let i = 0; i < LIMITS.reply.max; i++) await rateLimit('reply', 'u13')
+  await assert.rejects(rateLimit('reply', 'u13'), (e) => e instanceof RateLimitedError && e.retryAfterSeconds <= 60)
+  await rateLimit('reply', 'u13b')
+  // A free user out of runs keeps getting 402, never the hourly debate limit.
+  await makeUser('u13c', 'free', 5)
+  for (let i = 0; i < LIMITS.debate.max + 2; i++) {
+    await assert.rejects(createPanel({ uid: 'u13c', question: 'Should we raise a seed round now?', isPublic: false }), (e) => e instanceof FreeLimitReachedError)
+  }
+  assert.equal((await db.collection('rateLimits').doc('debate:u13c').get()).exists, false)
+})
+
+await scenario('14. deleting a running chat debate stops it and removes its message', async () => {
+  await fake('/__control', { tokenDelayMs: 100 })
+  await makeUser('u14', 'free', 1)
+  await db.collection('conversations').doc('c14').set({ userId: 'u14', title: null, createdAt: Timestamp.now(), updatedAt: Timestamp.now() })
+  const msgRef = db.collection('conversations').doc('c14').collection('messages').doc('m14')
+  await msgRef.set({ role: 'assistant', kind: 'debate', content: '', panelId: 'p14', status: 'complete', seq: 1, createdAt: Timestamp.now() })
+  await makePanel('p14', 'u14', { runCounted: true, conversationId: 'c14', messageId: 'm14' })
+  const running = runPanelJob('p14')
+  await until(async () => ((await panel('p14'))?.live?.content ?? '').length > 0, 'respondent text')
+  assert.equal(await deletePanel('p14', 'someone-else'), false)
+  assert.equal(await deletePanel('p14', 'u14'), true)
+  await running
+  assert.equal(await panel('p14'), undefined)
+  assert.equal((await msgRef.get()).exists, false)
+  assert.equal((await user('u14')).freeRunsUsed, 0, 'stopped before round 1: refunded')
+})
+
+await scenario('15. deleting an account removes all its data and its sign-in, and nothing else', async () => {
+  await adminAuth().createUser({ uid: 'u15', email: 'u15@example.com' })
+  await makeUser('u15', 'free', 2)
+  await makePanel('p15a', 'u15', { status: 'complete' }); await makePanel('p15b', 'u15', { status: 'error' })
+  await makePanel('p15-other', 'u2', { status: 'complete' })
+  await db.collection('conversations').doc('c15').set({ userId: 'u15', title: 'x', createdAt: Timestamp.now(), updatedAt: Timestamp.now() })
+  await db.collection('conversations').doc('c15').collection('messages').doc('m1').set({ role: 'user', kind: 'text', content: 'hi', panelId: null, status: 'complete', seq: 1 })
+  await rateLimit('reply', 'u15')
+  await deleteAccount('u15')
+  assert.equal(await panel('p15a'), undefined); assert.equal(await panel('p15b'), undefined)
+  assert.ok(await panel('p15-other'), "another user's panel is untouched")
+  assert.equal((await db.collection('conversations').doc('c15').get()).exists, false)
+  assert.equal((await db.collection('conversations').doc('c15').collection('messages').get()).size, 0)
+  assert.equal((await db.collection('rateLimits').where('uid', '==', 'u15').get()).size, 0)
+  assert.equal(await user('u15'), undefined)
+  await assert.rejects(adminAuth().getUser('u15'), (e) => e.code === 'auth/user-not-found')
+})
+
+await scenario('16. panel list pages through everything, newest first, without repeats', async () => {
+  const base = Date.now() - 100_000
+  const batch = db.batch()
+  for (let i = 0; i < PANEL_PAGE_SIZE + 5; i++) {
+    batch.set(db.collection('panels').doc(`p16-${i}`), { userId: 'u16', question: `Question number ${i}`, title: null, persona: 'general', status: 'complete', isPublic: true, parentPanelId: null, confidence: 'high', createdAt: Timestamp.fromMillis(base + i * 1000) })
+  }
+  await batch.commit()
+  const first = await listPanels('u16')
+  assert.equal(first.panels.length, PANEL_PAGE_SIZE); assert.ok(first.next)
+  assert.equal(first.panels[0].id, `p16-${PANEL_PAGE_SIZE + 4}`)
+  // The cursor panel is deleted before "Show more": paging still continues after it.
+  await db.collection('panels').doc(first.panels.at(-1).id).delete()
+  const second = await listPanels('u16', first.next)
+  assert.equal(second.panels.length, 5); assert.equal(second.next, null)
+  assert.equal(new Set([...first.panels, ...second.panels].map((p) => p.id)).size, PANEL_PAGE_SIZE + 5)
+  assert.deepEqual(await listPanels('u16', 'garbage'), { panels: [], next: null })
 })
 
 for (const r of results) console.log(r.join('  '))

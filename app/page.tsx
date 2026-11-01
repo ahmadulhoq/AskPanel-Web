@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { SiteFooter } from '@/components/SiteFooter'
 import { Button } from '@/components/ui/button'
 
 export default function LandingPage() {
@@ -53,6 +54,7 @@ export default function LandingPage() {
           ))}
         </div>
       </section>
+      <SiteFooter />
     </main>
   )
 }
