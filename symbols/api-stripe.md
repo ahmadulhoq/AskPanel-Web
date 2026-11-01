@@ -14,3 +14,4 @@
 - No FIXME/TODO/HACK comments found.
 - Webhook signature verification happens before any Firestore access — correct order, do not reorder.
 - Since 2026-10-31 every handled event re-reads the subscription from Stripe, so duplicates and out-of-order delivery converge; `shouldApply()` stops an old subscription's events from downgrading a newer one.
+- 2026-11-01 (PR #11): webhook `syncSubscription` also applies `allowanceOnTierChange(current.tier, fields.tier)` (fresh free allowance when Pro ends).

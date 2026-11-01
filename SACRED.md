@@ -20,14 +20,14 @@
 - **Added by:** cartographer (2026-09-14), formalizing an existing human-authored rule
 - **Rule:** Never remove or weaken this guard. If round-limit behavior needs to change, change `config.maxRounds` validation, not this guard.
 
-## S002 — Synthesizer uses non-streaming tool_use, not streaming text
+## S002 — Verdicts use one non-streaming tool call, not streamed text
 
-- **Location:** `lib/agents/orchestrator.ts`, `callSynthesizer()`
-- **What it looks like:** Respondent and Critic both stream token-by-token (`streamAgent()`), but the Synthesizer makes a single non-streaming call with `tools: [SYNTHESIZER_TOOL]` and `tool_choice: { type: 'any' }`. Inconsistent with the other two agents at first glance.
-- **Why it exists:** The Synthesizer must return structured, parseable JSON (`decision`, `confidence`, `reasoning`, `issuesFound`, `finalAnswer`). Streaming free-form text and trying to parse partial JSON out of it is unreliable. `tool_use` forces the model to emit valid structured output every time.
-- **Confidence:** High — explicitly documented in `.claude/rules/repo-rules.md` ("changing this breaks the structured output contract").
-- **Added by:** cartographer (2026-09-14)
-- **Rule:** Never convert the Synthesizer to streaming text output. If lower latency is needed, look at model choice or prompt length, not the tool_use mechanism.
+- **Location:** `lib/agents/orchestrator.ts` — `requestToolCall()`, used by `callSynthesizer()` and by the compare Judge (`lib/agents/compare.ts`)
+- **What it looks like:** Respondent, Critic and Proposers stream token-by-token (`streamAgent()`), but the Synthesizer and the Judge each make one non-streaming call with a strict tool (`SYNTHESIZER_TOOL`, `JUDGE_TOOL`) and `tool_choice: { type: 'auto' }`. Inconsistent with the other agents at first glance, and "auto" can look like it should be a forced choice.
+- **Why it exists:** Verdicts must be structured, parseable JSON (`decision`, `confidence`, `reasoning`, `issuesFound`, `finalAnswer`; the Judge's `winner`/`scores`). Parsing partial JSON out of streamed text is unreliable. Claude Sonnet 5.5 rejects a forced `tool_choice` (`any`/`tool`) with a 400, so the tool call is secured by: a strict schema (`strict: true`, `additionalProperties: false`), a system-prompt rule to always call the tool, one retry that keeps the text answer and tells the model to call the tool, and validation (`parseSynthesis()` / `parseJudgement()`). A call cut off at `max_tokens` or refused is not retried.
+- **Confidence:** High — documented in `.claude/rules/repo-rules.md` ("changing this breaks the structured output contract"); the forced-choice 400 is in the Sonnet 5.5 migration guide and enforced by the e2e fake (BL-053, PR #10).
+- **Added by:** cartographer (2026-09-14); wording updated 2026-11-01 with user approval (forced `tool_choice` → `auto` + strict, PR #10)
+- **Rule:** Never convert verdicts to streaming text output, and never reinstate a forced `tool_choice` on Claude Sonnet 5.5 or later — it fails every debate. If lower latency is needed, look at model choice, effort or prompt length, not the tool_use mechanism.
 
 ## S003 — cache_control: ephemeral on every agent system prompt
 
@@ -74,11 +74,11 @@
 - **Added by:** cartographer (2026-09-14), triaged with user
 - **Rule:** Do not remove these `redirect('/login')` calls to "match" the written rule. Instead, `.claude/rules/repo-rules.md`'s wording should be corrected (flagged separately — see CHANGELOG) to: "proxy.ts only checks cookie presence, not validity, to keep the edge bundle small. Server components/route handlers must still redirect on `getSessionUser() === null` to catch invalid/expired cookies."
 
-## S007 — Persist-before-stream: panel doc created before SSE stream opens
+## S007 — Persist first: the panel doc exists before any run or stream
 
-- **Location:** `app/api/panels/route.ts` (creates the Firestore panel doc, `status: 'queued'`) is always called and awaited BEFORE the client ever opens `GET /api/panels/[panelId]/stream`
-- **What it looks like:** Could look simplifiable — "why not just create the doc inside the stream handler when the orchestrator starts?"
-- **Why it exists:** This ordering is what makes SSE reconnection and page-refresh-mid-run recoverable. The stream route's `replayRounds()` reads whatever is already in Firestore and replays it as synthetic SSE events; if the doc didn't exist yet before the stream opened, there would be nothing to replay and no way to distinguish "panel doesn't exist" from "panel hasn't started yet."
-- **Confidence:** High — this is the explicit architecture documented in `.memory/RULES.md` / `docs/engineering/plans/mvp-architecture.md` and confirmed by reading `app/api/panels/route.ts` + `app/api/panels/[panelId]/stream/route.ts` together.
-- **Added by:** cartographer (2026-09-14)
-- **Rule:** Never restructure panel creation so that the Firestore doc is created lazily inside the stream handler.
+- **Location:** `lib/panels/create.ts` `createPanel()` — writes the panel doc (`status: 'queued'`) in a transaction, then starts `runPanelJob()` (`lib/agents/runner.ts`); `GET /api/panels/[panelId]/stream` only watches Firestore
+- **What it looks like:** Could look simplifiable — "why not create the doc when the stream opens, or run the debate inside the stream handler?"
+- **Why it exists:** Debates run in the background under a lease (`runPanelJob`) and survive the viewer leaving. The stream route and the share page rebuild everything from what is stored (`diffPanel()` in `lib/panels/streamDiff.ts`, `stateFromPanel()` in `lib/panels/replay.ts`), so page refresh, SSE reconnect, a second tab and MCP polling all work, and a missing doc means "doesn't exist", never "not started yet".
+- **Confidence:** High — matches `.claude/rules/repo-rules.md` ("Debates run only through `runPanelJob()` … Stream routes only watch Firestore") and `.memory/RULES.md`.
+- **Added by:** cartographer (2026-09-14); wording updated 2026-11-01 with user approval (background runner replaced the in-stream orchestrator and `replayRounds()`)
+- **Rule:** Never create the panel doc lazily in the stream handler, and never run the orchestrator inside a response stream.

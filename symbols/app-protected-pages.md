@@ -17,3 +17,4 @@
 - See SACRED S008 for why the `redirect('/login')` calls here are intentional, not a rule violation.
 
 - 2026-11-01 (BL-044): dashboard = migration + conversation list + composer (copy says "debates"); /chat → redirect; /chat/[cid] back link "← All conversations"; /panel/[id] back link to its conversation, follow-up composer only for panels without one, "Continue in the conversation →".
+- 2026-11-01 (PR #11): `PanelPage` renders `ShareDebateButton` (hidden for failed/stopped debates unless already shared); no `isPublic` to `PanelThread`. Dashboard/account use `allowance()`: account shows "N of 5/100 debates remaining" for both tiers; dashboard shows Pro's count only at ≤10 left.

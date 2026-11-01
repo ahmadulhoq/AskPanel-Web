@@ -21,3 +21,5 @@
 | BL-042 | Coordinator auto-routing: convene_panel, proposals, Just answer, routing log (PR #7) | 2026-11-01 | ~1w | 2026-11-01T11:00Z | 2026-11-01T12:30Z | ~1.5h | 22 (9 new, 13 edited) | completed |
 | BL-044 | Conversation-list dashboard, v1 migration, chat context (PR #8) | 2026-11-01 | ~1w | 2026-11-01T10:20Z | 2026-11-01T12:00Z | ~1.7h | 37 (9 new, 25 edited, 3 removed) | completed |
 | BL-045 | MCP server, API tokens (PR #9) | 2026-11-01 | ~1w | 2026-11-01T11:20Z | 2026-11-01T12:40Z | ~1.3h | 17 (13 new, 4 edited) | completed |
+| BL-053 + BL-047 | Sonnet 5.5 compatibility (tool_choice, thinking caps), Haiku 5.5 for titles/summaries (PR #10) | 2026-11-01 | ~1d | 2026-11-01T14:40Z | 2026-11-01T15:35Z | ~55 min | 13 (0 new, 13 edited) | completed |
+| BL-035 + BL-049 | Pro cap 100/month, share single debates (PR #11) | 2026-11-01 | ~2d | 2026-11-01T15:25Z | 2026-11-01T16:05Z | ~40 min | 26 (2 new, 23 edited, 1 removed) | completed |

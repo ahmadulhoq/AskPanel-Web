@@ -36,7 +36,7 @@
 | `app/(auth)/` | Sign-in/sign-up page | login |
 | `app/p/[panelId]/` | Public share view (no auth) | — |
 | `app/` (root) | Root layout + landing page | — |
-| `components/panel/` | Panel UI — thread, composer, controls | PanelInput, PanelThread, AgentTurn, FinalAnswer, PersonaSelector, ContextInput, CustomPersonaEditor, FollowUpComposer, RetryButton, ShareButton, SynthesisCard, ConfidenceBadge, QuestionBubble, PaywallDialog |
+| `components/panel/` | Panel UI — thread, composer, controls | PanelInput, PanelThread, AgentTurn, FinalAnswer, PersonaSelector, ContextInput, CustomPersonaEditor, FollowUpComposer, RetryButton, ShareDebateButton, SynthesisCard, ConfidenceBadge, QuestionBubble, PaywallDialog |
 | `components/dashboard/` | Dashboard-specific composition | QuestionComposer, PanelList, RoundsSelector, StarterQuestions |
 | `components/auth/` | Sign-in form + sign-out | AuthForm, SignOutButton |
 | `components/ui/` | shadcn primitives | Button, Dialog, Badge, Card, Input, Label, Separator, Toaster, Textarea |
@@ -59,9 +59,9 @@
 
 ### Panel Run (new panel) — background job since 2026-10-31
 - Entry: `QuestionComposer` → `PanelInput.tsx` → `POST /api/panels` → `{ panelId }` → `router.push('/panel/[panelId]')`
-- Creation: one transaction: `reserveRun()` (monthly reset → 5-run free limit → **counts the run**; 402 at limit) → clamp `maxRounds` by tier → copy custom persona → `tx.set()` panel with `status: 'queued'`, `runCounted` (SACRED S007 — doc exists before any stream opens)
+- Creation: one transaction: `reserveRun()` (30-day reset → 5 free / 100 Pro → **counts the run**, both tiers; 402 free / 429 Pro at the limit) → clamp `maxRounds` by tier → copy custom persona → `tx.set()` panel with `status: 'queued'`, `runCounted` (SACRED S007 — doc exists before any stream opens)
 - Start: `usePanel` opens `GET /api/panels/[panelId]/stream`; the route calls `runPanelJob(panelId)` detached — a no-op if a runner already holds a live lease
-- Run: `runPanelJob` takes the lease (60s TTL, 15s heartbeat) → `runPanel()` resumes after the last stored step → Respondent (stream) → Critic (stream) → Synthesizer (`tool_use`, SACRED S002) → repeat up to clamped max rounds; every write is a lease-checked transaction (`leasedUpdate`); in-progress text flushed to `panel.live` ≤1/s
+- Run: `runPanelJob` takes the lease (60s TTL, 15s heartbeat) → `runPanel()` resumes after the last stored step → Respondent (stream) → Critic (stream) → Synthesizer (`requestToolCall`: non-streaming `tool_use`, `tool_choice: auto` + strict, SACRED S002) → repeat up to clamped max rounds; every write is a lease-checked transaction (`leasedUpdate`); in-progress text flushed to `panel.live` ≤1/s
 - Viewing: the stream route tails the doc with `onSnapshot` → `diffPanel()` → SSE events. Viewers never affect the run; any number can watch
 - Termination: Synthesizer decision ≠ `'continue'`, or `isFinalRound` forces `'contested'` (SACRED S001)
 - Post-complete (in the runner): `generatePanelTitle()` awaited; lease + live cleared. On error: `refundRun()`
@@ -73,8 +73,11 @@
 - View: `diffCompare` → same SSE events (+ `index`, `compare_result`) → `panelReducer` → `ThreadView`; the share page replays the stored doc the same way (`stateFromPanel`)
 
 ### Follow-up Panel
-- Entry: `FollowUpComposer` (rendered after `FinalAnswer` on a completed panel) → `POST /api/panels` with `parentPanelId` + inherited `persona` + inherited `isPublic` (`panel.isPublic` threaded down from `PanelPage`, fixed 2026-09-15 BL-025 — see TECH_DEBT.md Resolved TD-003)
+- Entry: `FollowUpComposer` (rendered after `FinalAnswer` on a standalone completed panel) → `POST /api/panels` with `parentPanelId` + inherited `persona`. Starts **private** since 2026-11-01 (sharing is explicit; was inherited `isPublic`, BL-025)
 - Context injection: parent panel's `finalAnswer` is fetched (ownership-checked, outside the transaction) and merged with any user-provided context, stored as `context` on the new panel doc, injected into the Respondent's round-1 prompt only
+
+### Sharing a debate (2026-11-01, BL-049)
+- Single debates only, never conversations. `ShareDebateButton` (chat `DebateBlock` once the verdict is in; panel page unless failed/stopped) → confirm → `PATCH /api/panels/[id] {isPublic}` → `setPanelSharing` (owner-only transaction) → `/p/[panelId]` renders it (complete panels only; 404 otherwise). Stop sharing flips it back; the link 404s.
 
 ### Leaving, Reconnecting, Crashes
 - Leaving the page does not stop a run (it isn't tied to the request). A dropped connection is reopened by `usePanel` with backoff; each connection replays the full stored state through `diffPanel`.

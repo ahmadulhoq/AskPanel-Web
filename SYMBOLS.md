@@ -1,6 +1,6 @@
 # Symbol Index: askpanel-web
 > Split mode — 26 modules. Full symbols live in `.memory/symbols/[module-name].md`.
-> Last updated: 2026-11-01 (incremental: CI/e2e, chat settings/Stop/summary, launch basics)
+> Last updated: 2026-11-01 (incremental: … MCP, Sonnet 5.5 fix + Haiku (PR #10), Pro cap + sharing (PR #11))
 
 | Module | Files | Responsibility (one line) | Symbols file |
 |---|---|---|---|

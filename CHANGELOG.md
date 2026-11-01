@@ -1,5 +1,21 @@
 # Agent Changelog: askpanel-web
 
+## 2026-11-01 — BL-035 Pro cap + BL-049 sharing single debates (PR #11)
+
+- User decisions: Pro capped at 100 debates per 30 days; share single debates, never conversations; when Pro ends, the free allowance starts fresh.
+- `reserveRun` counts both tiers (`ProLimitReachedError` → 429 with the reset date; free stays 402 → paywall); refunds apply only in the window the run was counted in (`runWindowEndsAt`); Stripe webhook resets the counter on Pro → free (`allowanceOnTierChange`); account/dashboard via `allowance()` (expired windows count as reset).
+- `PATCH /api/panels/[id] {isPublic}` + `ShareDebateButton` (chat debates once finished, panel page); debates and follow-ups start private; privacy + terms rewritten for sharing and the Pro allowance.
+- Self-review: 10 findings, 9 fixed (follow-up after Stop sharing was public, share on failed debates, refund across windows, downgrade left 0 free, stale share state, duplicated limit mapping, hardcoded 100, stale comment, loose test). Not fixed: reset dates formatted in server time (UTC), as before.
+- e2e: 25 runner scenarios, 55 browser checks; unit 65.
+
+## 2026-11-01 — BL-053 Claude Sonnet 5.5 compatibility + BL-047 Haiku for light jobs (PR #10)
+
+- Found while checking the API docs: Sonnet 5.5 400s on forced `tool_choice` — every real debate would have failed at the verdict; token caps too small for default thinking; titles read `content[0]` (can be thinking). Fixed with `requestToolCall()` (auto + strict + prompt rule + one nudged retry), 16k caps, effort pinned (`DEBATE_EFFORT`), text blocks read by type. Titles/summaries on Haiku 5.5, thinking off.
+- The e2e fake now enforces the real request rules (forced tool_choice, strict schemas, disabled thinking, thinking-first responses, starved caps) and can simulate text-instead-of-tool and cut-off answers.
+- Self-review: 10 findings, 8 fixed (unvalidated/cut-off verdicts → `parseSynthesis`, retry on max_tokens, retry without nudge, empty agent turns stored, effort unpinned, fake coverage, coordinator stream skipping thinking rules, shadowed var); 2 needed no change (SACRED wording → user approved later; Done list cap).
+- User decisions (2026-11-01): keep debate effort high; SACRED S002 and S007 wording updated with approval (S002: `auto` + strict, never reinstate forced choice; S007: background runner + stream watches Firestore).
+- e2e: 23 runner scenarios, 49 browser checks; unit 64.
+
 ## 2026-11-01 — BL-045: MCP server, v2 M5 (PR #9)
 
 - `/api/mcp`: stateless, dual-era (2026-07-28 modern + 2025-xx legacy) MCP server with async `start_debate` / `get_debate_result`; personal API tokens on /account; docs/mcp.md. Checked the current spec (2026-07-28: no initialize, `server/discover`, `resultType`) before building.

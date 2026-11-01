@@ -7,7 +7,9 @@
 | Name | File | Responsibility |
 |---|---|---|
 | `getAnthropicClient()` | anthropic.ts | Lazy singleton Anthropic SDK client |
-| `DEFAULT_MODEL` (const) | anthropic.ts | `'claude-sonnet-5-5'` (since 2026-10-05; was `claude-sonnet-4-5`, EOL 2026-11-30) — the model used across all three agents (Respondent/Critic/Synthesizer) and title generation |
+| `DEFAULT_MODEL` (const) | anthropic.ts | `'claude-sonnet-5-5'` (since 2026-10-05; was `claude-sonnet-4-5`, EOL 2026-11-30) — debates, replies and the coordinator. Thinks by default (counts toward max_tokens); rejects forced tool_choice |
+| `DEBATE_EFFORT` (const) | anthropic.ts | `'high'` — Sonnet 5.5's default, pinned for debate turns and verdicts (user decision 2026-11-01: keep high; revisit after BL-031). Main cost lever |
+| `LIGHT_MODEL` (const) | anthropic.ts | `'claude-haiku-5-5'` — titles and rolling summaries, thinking disabled (BL-047 decision) |
 | `SESSION_COOKIE_NAME` (const) | auth.ts | `'__session'` — Firebase App Hosting convention, see SACRED S006 |
 | `SESSION_DURATION_MS` (const) | auth.ts | 14 days |
 | `createSessionCookie(idToken)` | auth.ts | Wraps `adminAuth().createSessionCookie()` |

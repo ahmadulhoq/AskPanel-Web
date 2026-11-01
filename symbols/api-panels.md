@@ -27,3 +27,4 @@
 - 2026-11-01 (BL-048): `POST /api/panels/[panelId]/stop` → `stopPanel()` (401/404/409, `{ ok, refunded }`). Retry also clears `stoppedAt`.
 
 - 2026-11-01 (BL-040): `GET /api/panels?cursor=` (next page), `DELETE /api/panels/[panelId]` (`deletePanel`). Create/retry return 429 (`RateLimitedError`) past 20 debates/hour.
+- 2026-11-01 (PR #11): `PATCH /api/panels/[panelId]` `{ isPublic: boolean }` → `setPanelSharing` (400 bad body, 404 not owner). `POST /api/panels` defaults `isPublic` to **false** (follow-ups start private). Retry route reuses `panelErrorResponse` (Pro cap → 429).
