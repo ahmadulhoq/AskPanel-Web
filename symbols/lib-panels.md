@@ -19,3 +19,9 @@
 2026-11-01 (BL-040):
 | `deletePanel(panelId, uid)` / `stopIfRunning(panelId, uid)` | delete.ts | Owner-only delete of a panel and its chat message (batch); a queued/running debate is stopped first (Stop refund rule). `stopIfRunning` ignores only `StopRejected` (already finished) — other failures abort the delete rather than skip a refund |
 | `listPanels(uid, cursor?)` / `PANEL_PAGE_SIZE` (20) | list.ts | Dashboard page, newest first, `orderBy(createdAt desc, __name__ desc)` (served by the existing userId+createdAt index). Returns `{ panels: PanelSummary[], next }`; `next` = exact `seconds.nanos.id` cursor, so deleting the cursor panel doesn't end paging |
+
+2026-11-01 (BL-043):
+- `diffPanel` branches to `diffCompare` for `mode: 'compare'`: stored proposals (keys `p0..p2`) and critic replay in order, then `synthesis_start` + `compare_result`, then live text (shared `liveEvents`, index-aware), then completion (`finish`).
+- `panelReducer` / `initialPanelState` / `PanelAction` (panelState.ts, moved from hooks/usePanel.ts — pure, tested): turns matched by agent + round + index; `compare_result` → `state.comparison`.
+- `stateFromPanel(panel)` (replay.ts, `.ts` imports so node:test loads it): stored panel → events → state. Used by the share page.
+- `stopPanel` refund rule by mode: critique → before round 1's verdict; compare → before all options are in.

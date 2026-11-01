@@ -41,3 +41,12 @@
 - Synthesizer intentionally uses non-streaming `tool_use` while Respondent/Critic stream — see SACRED S002.
 - Every agent's system prompt carries `cache_control: { type: 'ephemeral' }` — see SACRED S003.
 - `customPersona` param flows from `OrchestratorInput` through both prompt builders; activated only when `persona === 'custom'` AND a `custom` object is passed — the panel doc is expected to have already resolved and copied the user's saved custom persona onto itself at creation time (see `app/api/panels` module notes), so the orchestrator itself never reads the user doc.
+
+## Compare mode (2026-11-01, BL-043 — spec §7.3)
+| Name | File | Responsibility |
+|---|---|---|
+| `runCompare(input)` | compare.ts | Proposers ×3 (streamed, `agent: 'proposer'`, `index` 0..2) → Critic (streamed) → Judge (`tool_use` `judge_options`, 3000 max tokens) → one write of `compare.judgement` + `status: 'complete'`, `finalAnswer`, `confidence`. Resumes via `compareResumePoint`; lease-checked writes; exits quietly on `LeaseLostError` or abort. `runPanelJob` picks it when `panel.mode === 'compare'`. |
+| `streamTurn(agent, index, prompt, model, signal)` | compare.ts | Yields agent_start/agent_token for one turn, returns the text |
+| `PROPOSER_COUNT` (3), `emptyCompare()`, `compareResumePoint(compare)`, `optionName(content, fallback)`, `parseJudgement(input, options)`, `compareRunCounts(compare)` | compareState.ts | Pure (tested). Judge input validated: winner 1..n, scores clamped 1–10 and deduplicated, confidence fallback 'medium'. A compare run counts for Stop once all options are in. |
+| `buildProposerPrompt`, `buildCompareCriticPrompt`, `buildJudgePrompt`, `JUDGE_TOOL` | comparePrompts.ts | Static cached system prompts; a persona contributes only a "lens" line (its prompts are written for Respondent/Critic). Proposer k argues for the k-th option named in the question, else the best uncovered alternative. |
+- `orchestrator.ts` now exports `streamAgent` (role widened to `AgentRole`) and `leasedUpdate` (+ `PanelData`) for compare.ts. `runPanel` itself is unchanged (S001–S003).

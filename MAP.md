@@ -66,6 +66,11 @@
 - Post-complete (in the runner): `generatePanelTitle()` awaited; lease + live cleared. On error: `refundRun()`
 - Hosting: `apphosting.yaml` `cpuAlwaysAllocated: true` keeps CPU for runs after the starting request ends; without it, runs stall while unwatched and resume on the next view
 
+### Compare-options panel (2026-11-01, BL-043)
+- Entry: dashboard ModeSelector "Compare options" or chat debate settings → `mode: 'compare'` through `createPanel` (stores `mode`, `compare: { proposals: [], critic: null, judgement: null }`)
+- Run: `runPanelJob` → `runCompare`: 3 proposers (streamed, index 0..2) → critic → judge (`tool_use`) → complete with `finalAnswer`/`confidence` like critique, so lists, chat verdicts, title, export and sharing all work
+- View: `diffCompare` → same SSE events (+ `index`, `compare_result`) → `panelReducer` → `ThreadView`; the share page replays the stored doc the same way (`stateFromPanel`)
+
 ### Follow-up Panel
 - Entry: `FollowUpComposer` (rendered after `FinalAnswer` on a completed panel) → `POST /api/panels` with `parentPanelId` + inherited `persona` + inherited `isPublic` (`panel.isPublic` threaded down from `PanelPage`, fixed 2026-09-15 BL-025 — see TECH_DEBT.md Resolved TD-003)
 - Context injection: parent panel's `finalAnswer` is fetched (ownership-checked, outside the transaction) and merged with any user-provided context, stored as `context` on the new panel doc, injected into the Respondent's round-1 prompt only

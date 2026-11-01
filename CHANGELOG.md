@@ -1,5 +1,12 @@
 # Agent Changelog: askpanel-web
 
+## 2026-11-01 — BL-043: compare-options mode, v2 M3 (PR #6)
+
+- Proposers ×3 → Critic → Judge (`tool_use`, winner + scores), one round, resumable, Stop-aware. Critique loop untouched.
+- Refactors that came with it: client reducer → `lib/panels/panelState.ts` (pure, tested); thread rendering → `ThreadView`, shared with the share page, which now replays stored panels through diff + reducer instead of its own reconstruction.
+- Self-review: 9 findings fixed — notably compare runs were always refunded on Stop (now count once all options are in), tokens lacked the proposer index, Judge could be cut off at 1500 tokens.
+- e2e: 19 runner scenarios, 27 browser checks; unit 47. Follow-ups in BL-051.
+
 ## 2026-11-01 — BL-040: launch basics (PR #5)
 
 - /privacy + /terms (drafts written from the code; legal details → BL-050), footer links; delete account / panel / conversation; dashboard "Show more" with an exact cursor; per-account rate limits counted inside the reservation transactions.

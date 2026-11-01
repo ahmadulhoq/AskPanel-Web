@@ -17,3 +17,4 @@
 | BL-038 | CI workflow, e2e suite in repo, lint fixes, paywall wording (PR #3) | 2026-11-01 | ~1d | 2026-11-01T04:20Z | 2026-11-01T04:55Z | ~35 min | 23 (8 new e2e/CI files, 15 edited) | completed |
 | BL-048 | Chat debate settings, Stop, rolling summary, Pro-persona enforcement (PR #4) | 2026-11-01 | ~3d | 2026-11-01T05:00Z | 2026-11-01T06:30Z | ~1.5h | 31 (7 new, 24 edited) | completed |
 | BL-040 | Launch basics: legal pages, deletion, paging, rate limits (PR #5) | 2026-11-01 | ~4d | 2026-11-01T05:20Z | 2026-11-01T07:10Z | ~1.8h | 37 (21 new, 16 edited) | completed |
+| BL-043 | Compare-options debate mode (PR #6) | 2026-11-01 | ~1w | 2026-11-01T09:30Z | 2026-11-01T11:00Z | ~1.5h | 30 (9 new, 21 edited) | completed |
