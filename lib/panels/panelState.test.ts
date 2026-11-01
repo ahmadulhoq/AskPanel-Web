@@ -1,9 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { panelReducer, initialPanelState } from './panelState.ts'
-import { diffPanel, newCursor, type PanelView } from './streamDiff.ts'
-
-const replay = (panel: PanelView) => diffPanel(newCursor(), panel).reduce(panelReducer, initialPanelState())
+import { stateFromPanel as replay } from './replay.ts'
 
 test('a stored compare panel replays into proposer turns, critic, comparison and answer', () => {
   const judgement = { winner: 1, scores: [{ option: 1, score: 9, summary: 'a' }], reasoning: 'r', confidence: 'medium' as const }
@@ -24,10 +22,20 @@ test('consecutive proposers each get their own turn, even when replayed live', (
   let state = initialPanelState()
   for (const e of [
     { type: 'agent_start', agent: 'proposer', round: 1, index: 0 },
-    { type: 'agent_token', agent: 'proposer', token: 'A' },
+    { type: 'agent_token', agent: 'proposer', index: 0, token: 'A' },
     { type: 'agent_complete', agent: 'proposer', round: 1, index: 0, content: 'A!' },
     { type: 'agent_start', agent: 'proposer', round: 1, index: 1 },
-    { type: 'agent_token', agent: 'proposer', token: 'B' },
+    { type: 'agent_token', agent: 'proposer', index: 1, token: 'B' },
   ] as const) state = panelReducer(state, e)
   assert.deepEqual(state.turns.map((t) => [t.index, t.content, t.streaming]), [[0, 'A!', false], [1, 'B', true]])
+})
+
+test('a token goes only to its own proposer, even if two are marked streaming', () => {
+  let state = initialPanelState()
+  for (const e of [
+    { type: 'agent_start', agent: 'proposer', round: 1, index: 0 },
+    { type: 'agent_start', agent: 'proposer', round: 1, index: 1 },
+    { type: 'agent_token', agent: 'proposer', index: 1, token: 'B' },
+  ] as const) state = panelReducer(state, e)
+  assert.deepEqual(state.turns.map((t) => t.content), ['', 'B'])
 })

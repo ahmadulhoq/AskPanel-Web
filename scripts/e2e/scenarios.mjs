@@ -346,5 +346,23 @@ await scenario('18. compare mode: a runner killed during proposer 2 resumes at p
   assert.equal((await fake('/__stats')).proposer, 4, 'proposer 1 once, proposer 2 twice (killed + resumed), proposer 3 once')
 })
 
+await scenario('19. compare mode Stop: refunded while options are still coming, not after', async () => {
+  await fake('/__control', { tokenDelayMs: 60 })
+  await makeUser('u19', 'free', 2)
+  await makePanel('p19a', 'u19', { runCounted: true, mode: 'compare', compare: { proposals: [], critic: null, judgement: null } })
+  const a = runPanelJob('p19a')
+  await until(async () => (await panel('p19a'))?.live?.index === 1, 'proposer 2 to start')
+  assert.deepEqual(await stopPanel('p19a', 'u19'), { refunded: true })
+  await a
+  assert.equal((await user('u19')).freeRunsUsed, 1)
+
+  await makePanel('p19b', 'u19', { runCounted: true, mode: 'compare', compare: { proposals: [], critic: null, judgement: null } })
+  const b = runPanelJob('p19b')
+  await until(async () => (await panel('p19b'))?.live?.agent === 'critic', 'critic to start')
+  assert.deepEqual(await stopPanel('p19b', 'u19'), { refunded: false })
+  await b
+  assert.equal((await user('u19')).freeRunsUsed, 1, 'all options were in: the run counts')
+})
+
 for (const r of results) console.log(r.join('  '))
 process.exit(results.some((r) => r[0] === 'FAIL') ? 1 : 0)

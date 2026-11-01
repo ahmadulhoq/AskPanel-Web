@@ -48,23 +48,27 @@ export function diffPanel(cursor: StreamCursor, panel: PanelView): SSEEvent[] {
     }
   }
 
-  const live = panel.live
-  if (live && !cursor.emitted.has(`${live.round}:${live.agent}`) && panel.status === 'running') {
-    const same = cursor.live?.agent === live.agent && cursor.live.round === live.round
-    // A resumed run regenerates the turn from scratch; agent_start tells the client to reset it.
-    const restarted = same && (cursor.live!.runId !== live.runId || live.content.length < cursor.live!.sent)
-    if (!same || restarted) {
-      events.push({ type: 'agent_start', agent: live.agent, round: live.round })
-      cursor.live = { agent: live.agent, round: live.round, runId: live.runId, sent: 0 }
-    }
-    const c = cursor.live!
-    if (live.content.length > c.sent) {
-      events.push({ type: 'agent_token', agent: live.agent, token: live.content.slice(c.sent) })
-      c.sent = live.content.length
-    }
-  }
-
+  if (panel.live && !cursor.emitted.has(`${panel.live.round}:${panel.live.agent}`)) liveEvents(cursor, panel, events)
   return finish(cursor, panel, events)
+}
+
+// In-progress text of the turn being generated (the caller checks it isn't stored yet).
+function liveEvents(cursor: StreamCursor, panel: PanelView, events: SSEEvent[]) {
+  const live = panel.live
+  if (!live || panel.status !== 'running') return
+  const same = cursor.live?.agent === live.agent && cursor.live.round === live.round && cursor.live.index === live.index
+  // A resumed run regenerates the turn from scratch; agent_start tells the client to reset it.
+  const restarted = same && (cursor.live!.runId !== live.runId || live.content.length < cursor.live!.sent)
+  const at = live.index !== undefined ? { index: live.index } : {}
+  if (!same || restarted) {
+    events.push({ type: 'agent_start', agent: live.agent, round: live.round, ...at })
+    cursor.live = { agent: live.agent, round: live.round, ...at, runId: live.runId, sent: 0 }
+  }
+  const c = cursor.live!
+  if (live.content.length > c.sent) {
+    events.push({ type: 'agent_token', agent: live.agent, ...at, token: live.content.slice(c.sent) })
+    c.sent = live.content.length
+  }
 }
 
 function finish(cursor: StreamCursor, panel: PanelView, events: SSEEvent[]): SSEEvent[] {
@@ -107,20 +111,6 @@ function diffCompare(cursor: StreamCursor, panel: PanelView): SSEEvent[] {
     cursor.emitted.add('judge')
   }
 
-  const live = panel.live
-  if (live && panel.status === 'running' && !cursor.emitted.has(compareKey(live.agent, live.index))) {
-    const same = cursor.live?.agent === live.agent && cursor.live.index === live.index
-    const restarted = same && (cursor.live!.runId !== live.runId || live.content.length < cursor.live!.sent)
-    if (!same || restarted) {
-      const at = live.index !== undefined ? { index: live.index } : {}
-      events.push({ type: 'agent_start', agent: live.agent, round: 1, ...at })
-      cursor.live = { agent: live.agent, round: 1, ...at, runId: live.runId, sent: 0 }
-    }
-    const c = cursor.live!
-    if (live.content.length > c.sent) {
-      events.push({ type: 'agent_token', agent: live.agent, token: live.content.slice(c.sent) })
-      c.sent = live.content.length
-    }
-  }
+  if (panel.live && !cursor.emitted.has(compareKey(panel.live.agent, panel.live.index))) liveEvents(cursor, panel, events)
   return finish(cursor, panel, events)
 }

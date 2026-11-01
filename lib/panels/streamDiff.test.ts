@@ -91,7 +91,7 @@ test('compare mode: live proposer text streams, then completes without a second 
   assert.deepEqual(first.map((e) => e.type), ['agent_start', 'agent_complete', 'agent_start', 'agent_token'])
   assert.equal((first[2] as { index?: number }).index, 1)
   const more = diffPanel(cursor, view({ mode: 'compare', compare: { proposals: [{ content: 'P1' }], critic: null, judgement: null }, live: { ...live, content: 'Hello' } }))
-  assert.deepEqual(more, [{ type: 'agent_token', agent: 'proposer', token: 'lo' }])
+  assert.deepEqual(more, [{ type: 'agent_token', agent: 'proposer', index: 1, token: 'lo' }])
   const done = diffPanel(cursor, view({ mode: 'compare', compare: { proposals: [{ content: 'P1' }, { content: 'Hello!' }], critic: null, judgement: null }, live: null }))
   assert.deepEqual(done, [{ type: 'agent_complete', agent: 'proposer', round: 1, index: 1, content: 'Hello!' }])
 })

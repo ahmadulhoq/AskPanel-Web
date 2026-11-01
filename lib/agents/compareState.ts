@@ -47,3 +47,9 @@ export function parseJudgement(input: unknown, options: number): (CompareJudgeme
   const confidence = CONFIDENCE.includes(o.confidence as ConfidenceLevel) ? (o.confidence as ConfidenceLevel) : 'medium'
   return { winner, scores, reasoning: typeof o.reasoning === 'string' ? o.reasoning.trim() : '', confidence, finalAnswer }
 }
+
+// When a compare run starts to count for Stop: once all its options are in (the critic and
+// judge only weigh them). Before that, a stopped free run is refunded.
+export const compareRunCounts = (compare: PanelCompare | null | undefined) =>
+  (compare?.proposals?.length ?? 0) >= PROPOSER_COUNT
+

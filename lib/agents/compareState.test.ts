@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { compareResumePoint, optionName, parseJudgement, PROPOSER_COUNT } from './compareState.ts'
+import { compareResumePoint, compareRunCounts, optionName, parseJudgement, PROPOSER_COUNT } from './compareState.ts'
 
 test('compareResumePoint walks proposers, then critic, then judge', () => {
   assert.deepEqual(compareResumePoint(null), { step: 'proposer', index: 0 })
@@ -27,3 +27,10 @@ test('parseJudgement validates the winner and normalises scores', () => {
   assert.equal(parseJudgement({ winner: 1, finalAnswer: '' }, 3), null)
   assert.equal(parseJudgement({ winner: 1, finalAnswer: 'x', confidence: 'sure' }, 3)!.confidence, 'medium')
 })
+
+test('compareRunCounts: a compare run counts once all its options are in', () => {
+  assert.equal(compareRunCounts(null), false)
+  assert.equal(compareRunCounts({ proposals: [{ content: 'a' }, { content: 'b' }], critic: null, judgement: null }), false)
+  assert.equal(compareRunCounts({ proposals: Array.from({ length: PROPOSER_COUNT }, () => ({ content: 'x' })), critic: null, judgement: null }), true)
+})
+

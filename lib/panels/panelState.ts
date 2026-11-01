@@ -31,7 +31,7 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
     case 'agent_token': {
       const turns = state.turns.map((t) => {
         const isTarget =
-          t.agent === action.agent && t.streaming
+          t.agent === action.agent && t.index === action.index && t.streaming
         return isTarget ? { ...t, content: t.content + action.token } : t
       })
       return { ...state, turns }

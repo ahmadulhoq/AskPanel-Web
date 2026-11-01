@@ -177,7 +177,7 @@ export type ReplyStreamEvent =
 // SSE event types
 export type SSEEvent =
   | { type: 'agent_start'; agent: AgentRole; round: number; index?: number }
-  | { type: 'agent_token'; agent: AgentRole; token: string }
+  | { type: 'agent_token'; agent: AgentRole; index?: number; token: string }
   | { type: 'agent_complete'; agent: AgentRole; round: number; index?: number; content: string }
   | { type: 'synthesis_start'; round: number }
   | { type: 'synthesis_result'; round: number; decision: SynthesisDecision; confidence: ConfidenceLevel; reasoning: string; issuesFound: number }

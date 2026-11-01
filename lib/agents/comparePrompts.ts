@@ -2,6 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 import type { AgentPrompt } from './prompts'
 import { getPersona } from './personas'
 import { optionName } from './compareState'
+import type { CustomPersona } from '@/types'
 
 // Compare-options mode (spec §7.3). Separate from the critique prompts, which are unchanged.
 // System prompts are static so they cache (cache_control is applied by the callers).
@@ -28,9 +29,10 @@ const JUDGE_SYSTEM = `You are the Judge in a compare-options panel. You have the
 - The finalAnswer is what the user reads first: recommend the winner, say why each other option lost, and name the conditions under which you would choose differently. Clean markdown.
 - Confidence: "high" if the winner is clearly better, "medium" if it wins on balance, "low" if the call is close or depends on unknowns, "contested" if reasonable people would choose differently.`
 
-type CustomOverride = { label?: string }
+// Compare mode uses only a persona's name and description as a lens: personas' prompts
+// (including a custom persona's) are written for the Respondent/Critic roles.
+type CustomOverride = Pick<CustomPersona, 'label'>
 
-// A persona shapes the panel's lens; its critique-specific prompts don't apply here.
 function lens(personaKey: string, custom?: CustomOverride): string {
   if (personaKey === 'custom' && custom?.label) return `\n\nLens for this panel: ${custom.label}.`
   if (personaKey === 'general') return ''
