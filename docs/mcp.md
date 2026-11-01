@@ -11,7 +11,7 @@ conversation list.
 - **Protocol:** dual-era — modern clients (`2026-07-28`, version in each request's `_meta`,
   `server/discover`) and legacy clients (`2025-11-25`, `2025-06-18`, `2025-03-26`, with the
   `initialize` handshake) are both served. No sessions, no server-initiated messages.
-- **Rate limit:** 120 requests a minute per user, plus the usual debate limits.
+- **Rate limit:** 120 messages a minute per user (each message in a batch counts; batches are capped at 5), plus the usual debate limits.
 
 ## Tools
 

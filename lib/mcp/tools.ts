@@ -6,8 +6,11 @@ import { FreeLimitReachedError } from '@/lib/billing/runs'
 import { RateLimitedError } from '@/lib/limits/rateLimit'
 import { sanitizeDebateSettings } from '@/lib/conversations/settings'
 import { titleConversation } from '@/lib/conversations/title'
-import { messagesRef, recountDebates } from '@/lib/conversations/store'
+import { messagesRef } from '@/lib/conversations/store'
+import { runPanelJob } from '@/lib/agents/runner'
+import { stopIfRunning } from '@/lib/panels/delete'
 import type { McpServer, ToolResult } from './protocol'
+import type { DocumentReference } from 'firebase-admin/firestore'
 import type { PanelDoc } from '@/types'
 
 // MCP tools (spec §11): debates are long, so the API is asynchronous — start one, then
@@ -15,7 +18,6 @@ import type { PanelDoc } from '@/types'
 
 const APP_URL = () => process.env.NEXT_PUBLIC_APP_URL ?? 'https://askpanel.app'
 const MAX_WAIT_SECONDS = 25
-const POLL_MS = 2_000
 
 const text = (t: string, structured?: Record<string, unknown>, isError = false): ToolResult => ({
   content: [{ type: 'text', text: t }],
@@ -23,7 +25,8 @@ const text = (t: string, structured?: Record<string, unknown>, isError = false):
   ...(isError ? { isError: true } : {}),
 })
 
-export function askPanelServer(uid: string): McpServer {
+// `signal`: the HTTP request's, so a waiting call stops when the client goes away.
+export function askPanelServer(uid: string, signal?: AbortSignal): McpServer {
   return {
     info: { name: 'askpanel', version: '1.0.0' },
     instructions:
@@ -66,7 +69,7 @@ export function askPanelServer(uid: string): McpServer {
         },
       },
     ],
-    callTool: (name, args) => (name === 'start_debate' ? startDebate(uid, args) : getDebateResult(uid, args)),
+    callTool: (name, args) => (name === 'start_debate' ? startDebate(uid, args) : getDebateResult(uid, args, signal)),
   }
 }
 
@@ -77,9 +80,23 @@ async function startDebate(uid: string, args: Record<string, unknown>): Promise<
   const context = typeof args.context === 'string' && args.context.trim() ? args.context.trim().slice(0, MAX_CONTEXT_CHARS) : null
 
   // The debate lives in a conversation of its own, so the user finds it on their dashboard.
+  // The conversation and question are written first: if the debate then can't start, they
+  // are removed; once it has started, nothing can leave it without a conversation.
   const conversation = adminDb().collection('conversations').doc()
   const userRef = messagesRef(conversation.id).doc()
   const assistantRef = messagesRef(conversation.id).doc()
+  const seq = Date.now()
+  const opening = adminDb().batch()
+  opening.create(conversation, {
+    userId: uid, title: null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    debateCount: 1, source: 'mcp',
+  })
+  opening.create(userRef, {
+    role: 'user', kind: 'text', content: question, panelId: null, status: 'complete', seq, createdAt: FieldValue.serverTimestamp(),
+    ...(context ? { context } : {}),
+  })
+  await opening.commit()
+
   let panelId: string
   try {
     panelId = await createPanel({
@@ -94,6 +111,7 @@ async function startDebate(uid: string, args: Record<string, unknown>): Promise<
       messageId: assistantRef.id,
     })
   } catch (err) {
+    await adminDb().recursiveDelete(conversation).catch(() => {})
     if (err instanceof FreeLimitReachedError) {
       return text(`The user has used their free AskPanel debates for this month. They can upgrade at ${APP_URL()}/account.`, undefined, true)
     }
@@ -101,22 +119,17 @@ async function startDebate(uid: string, args: Record<string, unknown>): Promise<
     throw err
   }
 
-  const seq = Date.now()
-  const batch = adminDb().batch()
-  batch.set(conversation, {
-    userId: uid, title: null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
-    debateCount: 1, source: 'mcp',
-  })
-  batch.set(userRef, {
-    role: 'user', kind: 'text', content: question, panelId: null, status: 'complete', seq, createdAt: FieldValue.serverTimestamp(),
-    ...(context ? { context } : {}),
-  })
-  batch.set(assistantRef, {
-    role: 'assistant', kind: 'debate', content: '', panelId, status: 'complete', seq: seq + 1, createdAt: FieldValue.serverTimestamp(),
-  })
-  await batch.commit()
+  try {
+    await assistantRef.create({
+      role: 'assistant', kind: 'debate', content: '', panelId, status: 'complete', seq: seq + 1, createdAt: FieldValue.serverTimestamp(),
+    })
+  } catch (err) {
+    // The debate couldn't be attached to its conversation: stop it (refunded) rather than
+    // leave a charged debate the user can't find.
+    await stopIfRunning(panelId, uid).catch(() => {})
+    throw err
+  }
   void titleConversation(conversation.id, question)
-  void recountDebates(conversation.id)
 
   const url = `${APP_URL()}/chat/${conversation.id}`
   return text(
@@ -126,33 +139,60 @@ async function startDebate(uid: string, args: Record<string, unknown>): Promise<
   )
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+const TERMINAL = new Set(['complete', 'error'])
 
-async function getDebateResult(uid: string, args: Record<string, unknown>): Promise<ToolResult> {
+// Resolves with the panel once it is complete or failed, or at the deadline, or when the
+// client goes away — watching the doc rather than polling it.
+function waitForPanel(ref: DocumentReference, ms: number, signal?: AbortSignal): Promise<PanelDoc | undefined> {
+  return new Promise((resolve) => {
+    let latest: PanelDoc | undefined
+    let settled = false
+    const finish = () => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      unsubscribe()
+      signal?.removeEventListener('abort', finish)
+      resolve(latest)
+    }
+    const timer = setTimeout(finish, ms)
+    signal?.addEventListener('abort', finish)
+    const unsubscribe = ref.onSnapshot(
+      (snap) => {
+        latest = snap.data() as PanelDoc | undefined
+        if (!latest || TERMINAL.has(latest.status)) finish()
+      },
+      () => finish(),
+    )
+  })
+}
+
+async function getDebateResult(uid: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<ToolResult> {
   const id = typeof args.debate_id === 'string' ? args.debate_id.trim() : ''
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) return text('Unknown debate_id.', undefined, true)
   const waitMs = Math.min(Math.max(Number(args.wait_seconds ?? 20) || 0, 0), MAX_WAIT_SECONDS) * 1000
   const ref = adminDb().collection('panels').doc(id)
-  const deadline = Date.now() + waitMs
 
   let panel = (await ref.get()).data() as PanelDoc | undefined
   if (!panel || panel.userId !== uid) return text('Unknown debate_id.', undefined, true)
-  while ((panel.status === 'queued' || panel.status === 'running') && Date.now() + POLL_MS <= deadline) {
-    await sleep(POLL_MS)
-    panel = (await ref.get()).data() as PanelDoc
+  if (!TERMINAL.has(panel.status)) {
+    // Like a viewer opening the debate: resumes it if its runner died (no-op otherwise).
+    runPanelJob(id).catch((err) => console.error('[mcp] runner crashed', id, err))
+    if (waitMs > 0) panel = await waitForPanel(ref, waitMs, signal)
   }
+  if (!panel) return text('This debate was deleted.', { debate_id: id, status: 'deleted' }, true)
 
   const url = panel.conversationId ? `${APP_URL()}/chat/${panel.conversationId}` : `${APP_URL()}/panel/${id}`
   const transcript = `${APP_URL()}/panel/${id}`
-  if (panel.status === 'complete' && panel.finalAnswer) {
+  if (panel.status === 'complete') {
     const judgement = panel.mode === 'compare' ? panel.compare?.judgement ?? null : null
     const structured = {
       debate_id: id, status: 'complete', mode: panel.mode ?? 'critique', confidence: panel.confidence,
-      final_answer: panel.finalAnswer, url, transcript_url: transcript,
+      final_answer: panel.finalAnswer ?? '', url, transcript_url: transcript,
       ...(judgement ? { winner: judgement.winner, scores: judgement.scores } : {}),
     }
     const head = judgement ? `Winner: option ${judgement.winner}. ` : ''
-    return text(`${head}Confidence: ${panel.confidence}.\n\n${panel.finalAnswer}\n\nFull debate: ${transcript}`, structured)
+    return text(`${head}Confidence: ${panel.confidence}.\n\n${panel.finalAnswer ?? ''}\n\nFull debate: ${transcript}`, structured)
   }
   if (panel.status === 'error') {
     return text(`The debate did not finish: ${panel.errorMessage ?? 'it failed'}. See ${url}`, { debate_id: id, status: 'error', error: panel.errorMessage, url }, true)

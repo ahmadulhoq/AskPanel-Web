@@ -323,6 +323,10 @@ try {
   check('MCP, legacy client: initialize, then the two tools',
     init.body?.result?.protocolVersion === '2025-06-18' && initialized.status === 202
       && listed.body?.result?.tools?.map((t) => t.name).join() === 'start_debate,get_debate_result', JSON.stringify(listed.body).slice(0, 120))
+  const batch = await mcp(Array.from({ length: 6 }, (_, i) => ({ jsonrpc: '2.0', id: 100 + i, method: 'tools/list' })))
+  check('MCP: batches are capped, and every request gets an answer',
+    Array.isArray(batch.body) && batch.body.length === 6 && batch.body.filter((r) => r.result).length === 5 && batch.body[5].error?.code === -32600)
+  check('MCP: an empty batch is an invalid request', (await mcp([])).status === 400)
   const modern = { _meta: { 'io.modelcontextprotocol/protocolVersion': '2026-07-28' } }
   const discover = await mcp({ jsonrpc: '2.0', id: 3, method: 'server/discover', params: modern })
   check('MCP, modern client: server/discover', discover.body?.result?.supportedVersions?.includes('2026-07-28'))
