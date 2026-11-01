@@ -96,3 +96,20 @@ test('compare mode: live proposer text streams, then completes without a second 
   assert.deepEqual(done, [{ type: 'agent_complete', agent: 'proposer', round: 1, index: 1, content: 'Hello!' }])
 })
 
+
+test('compare mode: Pro revisions stream as round-2 proposer turns, then the judge', () => {
+  const cursor = newCursor()
+  const base = { proposals: [{ content: 'P1' }, { content: 'P2' }], critic: { content: 'C' }, revise: true, judgement: null }
+  const live = { agent: 'proposer' as const, round: 2, index: 0, content: 'R', runId: 'r1' }
+  const first = diffPanel(cursor, view({ mode: 'compare', compare: { ...base, revisions: [] }, live }))
+  // Round-1 proposer 0 is stored; the live round-2 turn for the same proposer is separate.
+  assert.deepEqual(first.slice(-2).map((e) => [e.type, 'round' in e ? e.round : undefined]), [['agent_start', 2], ['agent_token', undefined]])
+  const done = diffPanel(cursor, view({ mode: 'compare', compare: { ...base, revisions: [{ content: 'R1' }] }, live: null }))
+  assert.deepEqual(done, [{ type: 'agent_complete', agent: 'proposer', round: 2, index: 0, content: 'R1' }])
+  const judgement = { winner: 1, scores: [], reasoning: 'r', confidence: 'high' as const }
+  const end = diffPanel(cursor, view({
+    mode: 'compare', status: 'complete', finalAnswer: 'Pick 1', confidence: 'high',
+    compare: { ...base, revisions: [{ content: 'R1' }, { content: 'R2' }], judgement },
+  }))
+  assert.deepEqual(end.map((e) => e.type + ('round' in e ? `:${e.round}` : '')), ['agent_start:2', 'agent_complete:2', 'synthesis_start:2', 'compare_result', 'panel_complete'])
+})

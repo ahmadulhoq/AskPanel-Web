@@ -23,6 +23,13 @@ For each option, in order:
 - what would have to be true for it to fail.
 Test the options against the user's stated goals and constraints, and call out anything a proposer claimed without support. Be fair: if an option is strong, say so. Do not recommend a winner — the Judge does that. Clean markdown, under 400 words.`
 
+const REVISER_SYSTEM = `You are a Proposer in a compare-options panel, in the revision round. You proposed one option; a Critic then assessed every option. Now improve yours before a Judge picks the best one.
+
+- Keep the same option — revise it, don't switch to another.
+- Address the Critic's points about your option: fix weaknesses, add safeguards or conditions, or honestly concede limits you can't fix.
+- Start with the same markdown heading as your original proposal.
+- Be specific and practical. Under 300 words. Clean markdown.`
+
 const JUDGE_SYSTEM = `You are the Judge in a compare-options panel. You have the user's question, the options the proposers put forward, and the Critic's assessment. Pick the option that best serves the user. Always respond by calling the judge_options tool — never with plain text.
 
 - Score every option from 1 to 10 for this user, with a one-sentence reason.
@@ -50,13 +57,37 @@ export function buildProposerPrompt(
   personaKey = 'general',
   context?: string,
   custom?: CustomOverride,
+  // The options the user named (2–3), if any: this proposer argues for options[index].
+  options?: string[] | null,
 ): AgentPrompt {
-  const taken = previous.length
-    ? `\n\nOptions already proposed (yours must be clearly different):\n${previous.map((p, i) => `- ${optionName(p, `Option ${i + 1}`)}`).join('\n')}`
-    : ''
-  const assignment = `\n\nYou are proposer ${index + 1}. If the question names specific options, argue for option number ${index + 1} of those it names; if it names fewer than ${index + 1}, propose the strongest alternative not yet covered.`
+  let taken: string
+  let assignment: string
+  if (options?.length) {
+    const others = options.filter((_, i) => i !== index)
+    taken = `\n\nThe user wants these options compared: ${options.map((o, i) => `(${i + 1}) ${o}`).join('; ')}.`
+    assignment = `\n\nYou are proposer ${index + 1}. Argue for option ${index + 1}: "${options[index]}". Make it concrete and realistic; the other proposers argue for ${others.map((o) => `"${o}"`).join(' and ')}.`
+  } else {
+    taken = previous.length
+      ? `\n\nOptions already proposed (yours must be clearly different):\n${previous.map((p, i) => `- ${optionName(p, `Option ${i + 1}`)}`).join('\n')}`
+      : ''
+    assignment = `\n\nYou are proposer ${index + 1}. If the question names specific options, argue for option number ${index + 1} of those it names; if it names fewer than ${index + 1}, propose the strongest alternative not yet covered.`
+  }
   const user = `${context ? `${context}\n\n` : ''}Question: ${question}${taken}${assignment}`
   return { system: PROPOSER_SYSTEM + lens(personaKey, custom), user }
+}
+
+// Pro revision round: proposer `index` improves its option in answer to the critique.
+export function buildRevisionPrompt(
+  question: string,
+  index: number,
+  proposals: string[],
+  critique: string,
+  personaKey = 'general',
+  context?: string,
+  custom?: CustomOverride,
+): AgentPrompt {
+  const user = `${context ? `${context}\n\n` : ''}Question: ${question}\n\nAll options:\n\n${optionsBlock(proposals)}\n\n---\n\n[CRITIC]\n${critique}\n\n---\n\nYou proposed OPTION ${index + 1}. Revise it in answer to the critique.`
+  return { system: REVISER_SYSTEM + lens(personaKey, custom), user }
 }
 
 export function buildCompareCriticPrompt(question: string, proposals: string[], personaKey = 'general', context?: string, custom?: CustomOverride): AgentPrompt {
@@ -64,8 +95,12 @@ export function buildCompareCriticPrompt(question: string, proposals: string[], 
   return { system: CRITIC_SYSTEM + lens(personaKey, custom), user }
 }
 
-export function buildJudgePrompt(question: string, proposals: string[], critique: string, context?: string): AgentPrompt {
-  const user = `${context ? `${context}\n\n` : ''}Question: ${question}\n\nThe options:\n\n${optionsBlock(proposals)}\n\n---\n\n[CRITIC]\n${critique}`
+// `revised`: the options were revised after the critique (Pro); the critique is of the
+// originals, so the judge checks how well each revision answered it.
+export function buildJudgePrompt(question: string, proposals: string[], critique: string, context?: string, revised = false): AgentPrompt {
+  const label = revised ? 'The options, revised by their proposers after the critique below' : 'The options'
+  const note = revised ? '\n\n(The critique was of the original versions. Judge the revised options, and how well each answered it.)' : ''
+  const user = `${context ? `${context}\n\n` : ''}Question: ${question}\n\n${label}:\n\n${optionsBlock(proposals)}\n\n---\n\n[CRITIC]\n${critique}${note}`
   return { system: JUDGE_SYSTEM, user }
 }
 

@@ -82,35 +82,38 @@ function finish(cursor: StreamCursor, panel: PanelView, events: SSEEvent[]): SSE
   return events
 }
 
-// Compare mode: proposers (keyed by index), the critic, then the judge's result. All in
-// round 1, so the client's thread shows them as one round.
-const compareKey = (agent: AgentRole, index?: number) => (agent === 'proposer' ? `p${index}` : agent)
+// Compare mode: proposers (keyed by index) and the critic in round 1; Pro revisions as
+// proposer turns in round 2; then the judge's result.
+const compareKey = (agent: AgentRole, index?: number, round = 1) =>
+  (agent === 'proposer' ? `${round === 2 ? 'r' : 'p'}${index}` : agent)
 
 function diffCompare(cursor: StreamCursor, panel: PanelView): SSEEvent[] {
   const events: SSEEvent[] = []
   const compare = panel.compare
   const steps = [
-    ...(compare?.proposals ?? []).map((p, index) => ({ agent: 'proposer' as const, index, content: p.content })),
-    ...(compare?.critic ? [{ agent: 'critic' as const, index: undefined, content: compare.critic.content }] : []),
+    ...(compare?.proposals ?? []).map((p, index) => ({ agent: 'proposer' as const, index, round: 1, content: p.content })),
+    ...(compare?.critic ? [{ agent: 'critic' as const, index: undefined, round: 1, content: compare.critic.content }] : []),
+    ...(compare?.revisions ?? []).map((p, index) => ({ agent: 'proposer' as const, index, round: 2, content: p.content })),
   ]
   for (const step of steps) {
-    const key = compareKey(step.agent, step.index)
+    const key = compareKey(step.agent, step.index, step.round)
     if (cursor.emitted.has(key)) continue
-    const wasLive = cursor.live?.agent === step.agent && cursor.live.index === step.index
+    const wasLive = cursor.live?.agent === step.agent && cursor.live.index === step.index && cursor.live.round === step.round
     const at = step.index !== undefined ? { index: step.index } : {}
-    if (!wasLive) events.push({ type: 'agent_start', agent: step.agent, round: 1, ...at })
-    events.push({ type: 'agent_complete', agent: step.agent, round: 1, ...at, content: step.content })
+    if (!wasLive) events.push({ type: 'agent_start', agent: step.agent, round: step.round, ...at })
+    events.push({ type: 'agent_complete', agent: step.agent, round: step.round, ...at, content: step.content })
     cursor.emitted.add(key)
     if (wasLive) cursor.live = null
   }
 
   const judgement = compare?.judgement
   if (judgement && !cursor.emitted.has('judge')) {
-    events.push({ type: 'synthesis_start', round: 1 })
+    events.push({ type: 'synthesis_start', round: compare?.revisions?.length ? 2 : 1 })
     events.push({ type: 'compare_result', ...judgement })
     cursor.emitted.add('judge')
   }
 
-  if (panel.live && !cursor.emitted.has(compareKey(panel.live.agent, panel.live.index))) liveEvents(cursor, panel, events)
+  const live = panel.live
+  if (live && !cursor.emitted.has(compareKey(live.agent, live.index, live.round))) liveEvents(cursor, panel, events)
   return finish(cursor, panel, events)
 }

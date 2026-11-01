@@ -254,23 +254,53 @@ try {
   await page.getByTitle('Debate panel settings').click()
   await page.getByRole('radio', { name: 'Compare options' }).click()
   check('compare mode hides the rounds picker', await page.getByText('Debate rounds').count() === 0)
+  await page.getByLabel('Option 1').fill('Bootstrap for a year')
+  await page.getByLabel('Option 2').fill('Raise a seed round')
+  check('typed options show on the settings chip', /2 options/.test(await page.getByTitle('Debate panel settings').innerText()))
   await page.getByTitle('Debate panel settings').click()
-  await page.locator('textarea').first().fill('Bootstrap for a year, raise a seed round, or take a loan?')
+  await page.locator('textarea').first().fill('How should we fund the next year?')
   await page.getByRole('button', { name: 'Debate', exact: true }).click()
   await page.waitForURL(/\/chat\/[^/?]+$/, { timeout: 15000 })
   await page.getByText('Option 2 wins').waitFor({ timeout: 60000 })
   const compareUrl = `${BASE}/panel/${await page.locator('[data-panel-id]').first().getAttribute('data-panel-id')}`
   const optionLabels = await page.getByText(/^Option [123]$/).count()
-  check('compare mode: three options, a winner, and the judge\'s answer',
-    optionLabels === 3 && await page.getByText('Winner', { exact: true }).count() === 1 && await page.getByRole('heading', { name: 'Go with Plan B' }).count() === 1,
+  check('compare mode: your two options, a winner, and the judge\'s answer',
+    optionLabels === 2 && await page.getByText('Winner', { exact: true }).count() === 1 && await page.getByRole('heading', { name: 'Go with Plan B' }).count() === 1,
     `option labels: ${optionLabels}`)
+  check('each proposer argued for the option you named',
+    await page.getByRole('heading', { name: 'Bootstrap for a year' }).count() >= 1 && await page.getByRole('heading', { name: 'Raise a seed round' }).count() >= 1)
   await page.getByText('Option 2 wins').scrollIntoViewIfNeeded()
   await page.screenshot({ path: `${SHOTS}/11-compare.png` })
   await page.goto(compareUrl)
   await page.getByText('Option 2 wins').waitFor({ timeout: 15000 }).catch(() => {})
   check('the full transcript page shows the options and the winner',
-    await page.getByText('Option 2 wins').isVisible() && await page.getByText(/^Option [123]$/).count() === 3
+    await page.getByText('Option 2 wins').isVisible() && await page.getByText(/^Option [123]$/).count() === 2
       && await page.getByText('Continue in the conversation →').isVisible())
+
+  // A Pro compare debate with a revision round, as stored: the revised options show as a
+  // second round, with the winner marked there. (conversationId set so migration skips it.)
+  const txt = (s) => ({ stringValue: s })
+  const turnDoc = (s) => ({ mapValue: { fields: { content: txt(s) } } })
+  const arr = (values) => ({ arrayValue: { values } })
+  await seed('panels', 'revised1', {
+    userId: txt(uid), question: txt('Bootstrap or raise?'), title: txt('Funding'), persona: txt('general'), status: txt('complete'),
+    isPublic: { booleanValue: true }, mode: txt('compare'), confidence: txt('high'), finalAnswer: txt('## Go with Plan B'),
+    conversationId: txt('elsewhere'), rounds: { arrayValue: {} }, createdAt: ts(Date.now()), completedAt: ts(Date.now()),
+    compare: { mapValue: { fields: {
+      revise: { booleanValue: true },
+      proposals: arr([turnDoc('### Plan A\n\nfirst A'), turnDoc('### Plan B\n\nfirst B')]),
+      critic: turnDoc('Critique of both.'),
+      revisions: arr([turnDoc('### Plan A\n\nrevised A'), turnDoc('### Plan B\n\nrevised B')]),
+      judgement: { mapValue: { fields: {
+        winner: { integerValue: '2' }, reasoning: txt('B is safer.'), confidence: txt('high'),
+        scores: arr([1, 2].map((o) => ({ mapValue: { fields: { option: { integerValue: String(o) }, score: { integerValue: o === 2 ? '8' : '6' }, summary: txt('s') } } }))),
+      } } },
+    } } },
+  })
+  const revisedPage = await page.goto(BASE + '/p/revised1')
+  check('a revision round shows as "Revised after the critique", with the winner marked there',
+    revisedPage.status() === 200 && await page.getByText('Revised after the critique').count() === 1
+      && await page.getByText('revised B').isVisible() && await page.getByText('Winner', { exact: true }).count() === 1)
 
   // ── Coordinator: the assistant decides when to convene the panel ─────
   await fake('/__control', { tokenDelayMs: 10 })

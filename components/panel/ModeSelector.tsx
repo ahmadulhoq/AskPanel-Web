@@ -4,7 +4,7 @@ import type { PanelMode } from '@/types'
 
 const MODES: { value: PanelMode; label: string; hint: string }[] = [
   { value: 'critique', label: 'Stress-test', hint: 'One answer, challenged by a critic over rounds' },
-  { value: 'compare', label: 'Compare options', hint: 'Three options compete; a judge picks the winner' },
+  { value: 'compare', label: 'Compare options', hint: 'Options compete; a judge picks the winner' },
 ]
 
 // Which kind of debate to run.

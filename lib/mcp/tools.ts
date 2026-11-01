@@ -1,6 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { PERSONAS } from '@/lib/agents/personas'
+import { MAX_OPTION_CHARS } from '@/lib/agents/compareState'
 import { createPanel, MAX_CONTEXT_CHARS } from '@/lib/panels/create'
 import { FreeLimitReachedError, ProLimitReachedError, PRO_RUN_LIMIT, resetDateLabel } from '@/lib/billing/runs'
 import { RateLimitedError } from '@/lib/limits/rateLimit'
@@ -39,7 +40,7 @@ export function askPanelServer(uid: string, signal?: AbortSignal): McpServer {
         title: 'Start a debate',
         description:
           'Start an AskPanel debate on a decision, plan or trade-off. "critique": a Respondent answers, a Critic stress-tests it, a ' +
-          'Synthesizer gives a verdict with a confidence level. "compare": three options compete and a Judge picks the winner. ' +
+          'Synthesizer gives a verdict with a confidence level. "compare": 2–3 options (yours, via `options`, or the panel\'s) compete and a Judge picks the winner. ' +
           'Returns a debate_id immediately; call get_debate_result to get the verdict.',
         inputSchema: {
           type: 'object',
@@ -49,6 +50,7 @@ export function askPanelServer(uid: string, signal?: AbortSignal): McpServer {
             persona: { type: 'string', enum: PERSONAS.map((p) => p.key), description: 'The panel\'s lens (some need AskPanel Pro). Default "general".' },
             rounds: { type: 'integer', minimum: 1, maximum: 3, description: 'Critique mode: maximum debate rounds (3 needs Pro). Default 2.' },
             context: { type: 'string', maxLength: MAX_CONTEXT_CHARS, description: 'Optional background the panel should consider (documents, notes).' },
+            options: { type: 'array', items: { type: 'string', maxLength: MAX_OPTION_CHARS }, minItems: 2, maxItems: 3, description: 'Compare mode: the 2–3 options to compare, each argued by one proposer. Omit to let the panel take them from the question.' },
           },
           required: ['question'],
         },
@@ -106,6 +108,7 @@ async function startDebate(uid: string, args: Record<string, unknown>): Promise<
       persona: settings.persona,
       maxRounds: settings.maxRounds,
       mode: settings.mode,
+      options: args.options,
       userContext: context,
       conversationId: conversation.id,
       messageId: assistantRef.id,

@@ -7,6 +7,7 @@ import { DebateSettingsPanel, debateSettingsLabel } from './DebateSettingsPanel'
 import { stashPendingContext } from './pendingContext'
 import { StarterQuestions } from '@/components/dashboard/StarterQuestions'
 import { DEFAULT_DEBATE_SETTINGS } from '@/lib/conversations/settings'
+import { EMPTY_OPTIONS, filledOptions } from '@/components/panel/CompareOptionsInput'
 import type { CustomPersona } from '@/types'
 
 interface Props {
@@ -20,6 +21,7 @@ export function NewConversation({ tier, initialCustomPersona }: Props) {
   const [settings, setSettings] = useState(DEFAULT_DEBATE_SETTINGS)
   const [customPersona, setCustomPersona] = useState(initialCustomPersona)
   const [context, setContext] = useState('')
+  const [options, setOptions] = useState(EMPTY_OPTIONS)
   const [starter, setStarter] = useState<{ text: string; n: number }>({ text: '', n: 0 })
 
   async function start(content: string, mode: SendMode): Promise<boolean> {
@@ -32,7 +34,8 @@ export function NewConversation({ tier, initialCustomPersona }: Props) {
       }
       const { conversationId } = await res.json()
       // Too long for the URL: handed to the conversation page through session storage.
-      if (context.trim()) stashPendingContext(conversationId, context)
+      const named = settings.mode === 'compare' ? filledOptions(options) : undefined
+      if (context.trim() || named) stashPendingContext(conversationId, { context, options: named })
       // The conversation page sends this first message and removes it from the URL.
       const params = new URLSearchParams({
         q: content, mode, persona: settings.persona, rounds: String(settings.maxRounds), panel: settings.mode,
@@ -55,7 +58,7 @@ export function NewConversation({ tier, initialCustomPersona }: Props) {
         autoFocus
         placeholder="Start a conversation — plans, decisions, anything."
         settings={{
-          label: debateSettingsLabel(settings, customPersona, context),
+          label: debateSettingsLabel(settings, customPersona, context, options),
           panel: (
             <DebateSettingsPanel
               tier={tier}
@@ -65,6 +68,8 @@ export function NewConversation({ tier, initialCustomPersona }: Props) {
               onCustomPersonaChange={setCustomPersona}
               context={context}
               onContextChange={setContext}
+              options={options}
+              onOptionsChange={setOptions}
             />
           ),
         }}

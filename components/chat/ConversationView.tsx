@@ -12,7 +12,11 @@ import { DebateBlock } from './DebateBlock'
 import { ProposalCard } from './ProposalCard'
 import { DebateSettingsPanel, debateSettingsLabel } from './DebateSettingsPanel'
 import { takePendingContext } from './pendingContext'
-import type { CustomPersona, DebateSettings, MessageView, ReplyStreamEvent } from '@/types'
+import { EMPTY_OPTIONS, filledOptions } from '@/components/panel/CompareOptionsInput'
+import type { CustomPersona, DebateSettings, MessageView, PanelMode, ReplyStreamEvent } from '@/types'
+
+// Options go with compare debates only (the fields are hidden in critique mode).
+const compareOptions = (mode: PanelMode, value: string[]) => (mode === 'compare' ? filledOptions(value) : undefined)
 
 interface Props {
   conversationId: string
@@ -35,6 +39,8 @@ export function ConversationView({
   const [settings, setSettings] = useState(initialSettings)
   const [customPersona, setCustomPersona] = useState(initialCustomPersona)
   const [context, setContext] = useState('')
+  // Compare mode: options for the next debate; cleared once a debate starts.
+  const [options, setOptions] = useState(EMPTY_OPTIONS)
 
   const patch = (id: string, change: (m: MessageView) => MessageView) =>
     setMessages((all) => all.map((m) => (m.id === id ? change(m) : m)))
@@ -79,6 +85,7 @@ export function ConversationView({
         } else if (replyId && event.type === 'routed') {
           finished = true
           patch(replyId, () => event.message)
+          if (event.message.kind === 'debate') setOptions(EMPTY_OPTIONS)
         } else if (replyId && event.type === 'done') {
           finished = true
           patch(replyId, (m) => ({ ...m, status: 'complete' }))
@@ -96,19 +103,20 @@ export function ConversationView({
     return replyId !== null
   }, [])
 
-  const send = useCallback(async (content: string, mode: SendMode, attach = context): Promise<boolean> => {
+  const send = useCallback(async (content: string, mode: SendMode, attach = context, named = options): Promise<boolean> => {
     setError('')
     setBusy(true)
     try {
       const res = await fetch(`/api/conversations/${conversationId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, mode, settings, context: attach || undefined }),
+        body: JSON.stringify({ content, mode, settings, context: attach || undefined, options: compareOptions(settings.mode, named) }),
       })
       if (!res.ok) return await handleFailure(res)
       setContext('')
 
       if (mode === 'debate') {
+        setOptions(EMPTY_OPTIONS)
         const { messages: added } = (await res.json()) as { messages: MessageView[] }
         setMessages((all) => [...all, ...added])
         return true
@@ -120,7 +128,7 @@ export function ConversationView({
     } finally {
       setBusy(false)
     }
-  }, [conversationId, handleFailure, settings, readReply, context])
+  }, [conversationId, handleFailure, settings, readReply, context, options])
 
   const debateReply = useCallback(async (messageId: string) => {
     setError('')
@@ -129,20 +137,21 @@ export function ConversationView({
       const res = await fetch(`/api/conversations/${conversationId}/debates`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messageId, settings }),
+        body: JSON.stringify({ messageId, settings, options: compareOptions(settings.mode, options) }),
       })
       if (!res.ok) {
         await handleFailure(res)
         return
       }
       const { message } = (await res.json()) as { message: MessageView }
+      setOptions(EMPTY_OPTIONS)
       setMessages((all) => [...all, message])
     } catch {
       setError('Network error. Please try again.')
     } finally {
       setBusy(false)
     }
-  }, [conversationId, handleFailure, settings])
+  }, [conversationId, handleFailure, settings, options])
 
   // A debate the assistant proposed: run it.
   const runProposal = useCallback(async (messageId: string) => {
@@ -152,20 +161,21 @@ export function ConversationView({
       const res = await fetch(`/api/conversations/${conversationId}/messages/${messageId}/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settings }),
+        body: JSON.stringify({ settings, options: compareOptions(settings.mode, options) }),
       })
       if (!res.ok) {
         await handleFailure(res)
         return
       }
       const { message } = (await res.json()) as { message: MessageView }
+      setOptions(EMPTY_OPTIONS)
       patch(messageId, () => message)
     } catch {
       setError('Network error. Please try again.')
     } finally {
       setBusy(false)
     }
-  }, [conversationId, handleFailure, settings])
+  }, [conversationId, handleFailure, settings, options])
 
   // A debate the assistant proposed or started: answer directly instead.
   const answerInstead = useCallback(async (messageId: string) => {
@@ -191,7 +201,8 @@ export function ConversationView({
     if (!pending || sentPending.current) return
     sentPending.current = true
     router.replace(`/chat/${conversationId}`, { scroll: false })
-    send(pending.content, pending.mode, takePendingContext(conversationId))
+    const extras = takePendingContext(conversationId)
+    send(pending.content, pending.mode, extras.context, extras.options ?? EMPTY_OPTIONS)
   }, [pending, conversationId, router, send])
 
   return (
@@ -237,7 +248,7 @@ export function ConversationView({
           disabled={busy}
           autoFocus
           settings={{
-            label: debateSettingsLabel(settings, customPersona, context),
+            label: debateSettingsLabel(settings, customPersona, context, options),
             panel: (
               <DebateSettingsPanel
                 tier={tier}
@@ -247,6 +258,8 @@ export function ConversationView({
                 onCustomPersonaChange={setCustomPersona}
                 context={context}
                 onContextChange={setContext}
+                options={options}
+                onOptionsChange={setOptions}
               />
             ),
           }}
