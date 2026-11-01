@@ -20,6 +20,19 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Tests
+
+```bash
+npm run lint
+npm test        # unit tests (node:test, no extra dependencies)
+npm run e2e     # end-to-end: Firebase emulators + a fake model API + Chromium
+```
+
+`npm run e2e` needs Java 21+ and Playwright with Chromium
+(`npm i --no-save playwright@1.56.1 && npx playwright install chromium`). It uses no real
+credentials and never calls Anthropic, Stripe or a real Firebase project. CI runs all three
+on every pull request (`.github/workflows/ci.yml`). See `scripts/e2e/run.sh` for details.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

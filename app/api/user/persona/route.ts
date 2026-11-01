@@ -42,7 +42,7 @@ export async function PUT(request: NextRequest) {
   return NextResponse.json({ ok: true, customPersona })
 }
 
-export async function DELETE(_request: NextRequest) {
+export async function DELETE() {
   const user = await getSessionUser()
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
