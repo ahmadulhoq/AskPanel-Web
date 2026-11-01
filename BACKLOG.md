@@ -14,9 +14,8 @@
 | BL-035 | P1 | Decide the Pro run cap | 2026-10-30 | | Upgrade dialog promises "100 panel runs / month"; code gives Pro unlimited runs. Either enforce a cap or fix the copy (audit #5). Needs a pricing decision — see v2 spec §8, §13 |
 | BL-037 | P1 | Decide `cpuAlwaysAllocated` | 2026-10-31 | | On (current): debates finish while users are away; CPU billed for instance lifetime. Off: cheaper; unwatched debates pause and resume on return. v2 spec §13.5 |
 | BL-050 | P1 | Legal details for /privacy and /terms | 2026-11-01 | | Fill in `lib/legal.ts` (operator's legal name, contact email, governing law) — the pages show a "Draft" notice until then. Both pages were written from what the code does; have them reviewed (refund policy, age limit 16, price-change notice are placeholders for your call) |
-| BL-047 | P1 | Decide quick-reply limits and model | 2026-10-31 | | Free users get 30 quick replies/day — a placeholder (`lib/billing/replies.ts`). Also whether replies (and the rolling-summary call, `lib/conversations/summary.ts`) use Sonnet 5.5 (current) or a cheaper model. v2 spec §13.1–13.2 |
+| BL-047 | P1 | Decide quick-reply limits and model | 2026-10-31 | | Free users get 30 quick replies/day — a placeholder (`lib/billing/replies.ts`). Also whether replies (and the rolling-summary call, `lib/conversations/summary.ts`) use Sonnet 5.5 (current) or a cheaper model — the reply model is now also the coordinator that decides when to debate, so a cheaper model means worse routing; check the `routingEvents` override rate. v2 spec §13.1–13.2 |
 | BL-049 | P2 | Decide conversation sharing | 2026-11-01 | | Chat debates are private (`isPublic: false`); conversations can't be shared. Share the whole conversation, single verdicts, or nothing? v2 spec §13.4 |
-| BL-042 | P2 | v2 M2: coordinator auto-routing | 2026-10-31 | | `convene_panel` tool, free-tier consent card, override logging, metering changes (spec §4, §8) |
 | BL-051 | P3 | Compare mode follow-ups | 2026-11-01 | | Spec §7.3 items not in the first version: a Pro second round where proposers revise after the critique; let users type their own options (today proposers take options named in the question, else invent them); compare in the MCP tools (BL-045) |
 | BL-044 | P2 | v2 M4: migrate v1 panels, conversation-list dashboard, launch | 2026-10-31 | | Spec §10 |
 | BL-045 | P2 | v2 M5: MCP server (plugin distribution) | 2026-10-31 | | Async `start_debate` / `get_debate_result` tools; OAuth; links back to transcripts (spec §11) |
@@ -28,8 +27,8 @@
 
 | ID | Title | Completed |
 |----|-------|-----------|
+| BL-042 | v2 M2: the chat assistant decides when to convene the panel (`convene_panel`); free tier gets a Run / Just answer card, Pro starts automatically; every decision and override logged | 2026-11-01 |
 | BL-043 | v2 M3: Compare options — 3 proposers, a critic, a judge that names a winner with scores; dashboard + chat, share page, export, Stop/resume | 2026-11-01 |
 | BL-040 | Launch basics: privacy + terms pages (drafts), delete account / panel / conversation, dashboard "Show more", rate limits on debates, replies, context and sign-in | 2026-11-01 |
 | BL-048 | Chat debates: persona + rounds (remembered per conversation), Stop button (refund before round-1 verdict), rolling summary for long conversations; Pro personas now enforced server-side | 2026-11-01 |
 | BL-038 | CI (lint, unit, build, e2e on every PR), e2e suite committed (`npm run e2e`), lint clean, paywall says "Pro feature" for locked controls | 2026-11-01 |
-| BL-041 | v2 M1: conversations at /chat (beta) — quick replies, Debate button, "Debate this", inline live debates; verified in a browser | 2026-10-31 |

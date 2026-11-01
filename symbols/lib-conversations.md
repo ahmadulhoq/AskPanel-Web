@@ -23,3 +23,14 @@
 Conversation doc fields added 2026-11-01 (BL-048): `summary`, `summarizedThroughSeq`, `debateSettings` (stored only when the client sends settings).
 
 - `deleteConversation(cid, uid)` (delete.ts, BL-040): stops its running debates in parallel, recursive-deletes the conversation (doc first, so in-flight message writes — which also update the conversation doc — fail), deletes its panels, then sweeps panels created meanwhile.
+
+## Coordinator (2026-11-01, BL-042 — spec §4)
+| Name | File | Responsibility |
+|---|---|---|
+| `streamReply(messages, { allowPanel })` | reply.ts | Two cached system prompts: COORDINATOR (with `convene_panel` tool, routing policy) and ANSWER ("Just answer", no tool). Yields `{type:'text'}` chunks, or one `{type:'panel', routing}` when the tool is called (input built from `input_json_delta`); an unusable tool call falls back to a direct answer |
+| `CONVENE_PANEL_TOOL` | reply.ts | `{ mode: critique|compare, question, reason, options? }` |
+| `parseRouting(input)` | routing.ts | Pure (tested): question ≥10 chars (≤2000), reason default, mode default critique, named options appended to a compare question if missing |
+| `respond(opts)` | respond.ts | SSE responder shared by new replies and "Just answer": 'start' (userMessage may be null), tokens, then 'done' — or 'routed' with the converted message via the `route` callback; `after` hook (title, routing log, summary). Generation continues if the client leaves |
+| `logRouting(uid, cid, mid, event, mode)` | routingLog.ts | `routingEvents` docs (no message text): answer, debate, propose, run_proposal, just_answer, debate_this, debate_button. Deleted with the account |
+| `getMessage(cid, mid)`, `loadMessages(cid, limit, beforeSeq?)` | store.ts | Direct read; history before a message |
+- Message fields: `kind: 'debate_proposal'`, `routing: { mode, question, reason }` (kept on coordinator debates for the reason line), `claimedAt` (transient, run claim). Context renders an open proposal as "[Suggested running the panel on this — the user has not run it]".

@@ -83,7 +83,7 @@
 
 ### Conversation (v2 M1, beta at /chat)
 - New: `/chat` composer → `POST /api/conversations` → `/chat/[cid]?q=…&mode=…` → page passes `pending` (only if empty) → `ConversationView` drops the params with `router.replace`, then sends
-- Quick reply (Enter): `POST …/messages {mode:'reply'}` → `reserveReply()` (free: 30/day) → user + streaming assistant message written → `toModelMessages(history)` → `streamReply()` streamed as SSE from the POST → saved on completion even if the client left
+- Enter (coordinator, 2026-11-01): `POST …/messages {mode:'reply'}` → `reserveReply()` → reply model with `convene_panel`: text → streamed reply; tool call → Pro: debate starts (reason + Just answer shown) / free: proposal card (Run the panel → `…/[mid]/run`, Just answer → `…/[mid]/answer`). Decisions and overrides → `routingEvents`
 - Debate (Debate button): `POST …/messages {mode:'debate'}` → `createPanel()` with `debateContext(history)` → runner starts immediately → assistant `kind:'debate'` message → `DebateBlock` renders `PanelThread` live
 - Debate this: `POST …/debates {messageId}` → debates the user message that reply answered, with the conversation before it as context
 - Later replies see finished debates as `[Panel verdict — …]` turns (read live from the panel docs by `loadMessages`)

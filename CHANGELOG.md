@@ -1,5 +1,11 @@
 # Agent Changelog: askpanel-web
 
+## 2026-11-01 — BL-042: coordinator auto-routing, v2 M2 (PR #7)
+
+- The reply model decides when to convene the panel (`convene_panel`); Pro auto-starts, free gets a Run / Just answer card; "Just answer" on a running coordinator debate stops it and answers; all decisions/overrides logged to `routingEvents`.
+- Self-review: 10 findings fixed — notably deleting a stopped panel could delete the "Just answer" reply (panel still pointed at the message), double clicks could run/charge or stream twice (now transactional claims), an unusable tool call failed the reply (now falls back), a debate finishing during "Just answer" lost its verdict.
+- e2e: 19 runner scenarios, 35 browser checks (incl. concurrent "Just answer" → 200/409); unit 51.
+
 ## 2026-11-01 — BL-043: compare-options mode, v2 M3 (PR #6)
 
 - Proposers ×3 → Critic → Judge (`tool_use`, winner + scores), one round, resumable, Stop-aware. Critique loop untouched.
