@@ -13,9 +13,22 @@ import { Button } from '@/components/ui/button'
 interface Props {
   open: boolean
   onClose: () => void
+  /** 'limit': opened because the free runs ran out. 'feature': a locked Pro control was clicked. */
+  reason?: 'limit' | 'feature'
 }
 
-export function PaywallDialog({ open, onClose }: Props) {
+const COPY = {
+  limit: {
+    title: 'You’ve used your free panel runs',
+    description: 'Upgrade to Pro to keep going now, or come back when your free runs reset.',
+  },
+  feature: {
+    title: 'That’s a Pro feature',
+    description: 'Upgrade to Pro to unlock it.',
+  },
+} as const
+
+export function PaywallDialog({ open, onClose, reason = 'limit' }: Props) {
   const [loading, setLoading] = useState(false)
 
   async function handleUpgrade() {
@@ -33,10 +46,8 @@ export function PaywallDialog({ open, onClose }: Props) {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>You've used your 5 free panel runs</DialogTitle>
-          <DialogDescription>
-            Upgrade to Pro for unlimited runs, all personas, and file upload.
-          </DialogDescription>
+          <DialogTitle>{COPY[reason].title}</DialogTitle>
+          <DialogDescription>{COPY[reason].description}</DialogDescription>
         </DialogHeader>
         <div className="rounded-lg border bg-muted/30 p-4">
           <p className="text-2xl font-bold">$15 <span className="text-base font-normal text-muted-foreground">/ month</span></p>

@@ -50,7 +50,7 @@ export function RoundsSelector({ value, onChange, tier }: Props) {
           })}
         </div>
       </div>
-      <PaywallDialog open={showPaywall} onClose={() => setShowPaywall(false)} />
+      <PaywallDialog open={showPaywall} onClose={() => setShowPaywall(false)} reason="feature" />
     </>
   )
 }

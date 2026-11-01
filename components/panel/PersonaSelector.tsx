@@ -103,7 +103,7 @@ export function PersonaSelector({ persona, onPersonaChange, tier, customPersona,
         )}
       </div>
 
-      <PaywallDialog open={showPaywall} onClose={() => setShowPaywall(false)} />
+      <PaywallDialog open={showPaywall} onClose={() => setShowPaywall(false)} reason="feature" />
       <CustomPersonaEditor
         open={showEditor}
         onClose={() => setShowEditor(false)}

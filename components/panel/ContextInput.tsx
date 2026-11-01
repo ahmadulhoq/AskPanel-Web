@@ -190,7 +190,7 @@ export function ContextInput({ tier, value, onChange }: Props) {
         )}
       </div>
 
-      <PaywallDialog open={showPaywall} onClose={() => setShowPaywall(false)} />
+      <PaywallDialog open={showPaywall} onClose={() => setShowPaywall(false)} reason="feature" />
     </>
   )
 }

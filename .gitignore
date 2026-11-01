@@ -43,3 +43,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# end-to-end test output (scripts/e2e) and emulator logs
+/e2e-results/
+*-debug.log
