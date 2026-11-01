@@ -11,3 +11,5 @@
 
 ## Notes / Findings
 - No FIXME/TODO/HACK comments found.
+
+- 2026-11-01 (BL-040): `/privacy` and `/terms` (public; `components/legal/LegalPage.tsx` shell with a Draft notice while `lib/legal.ts` is unfilled — written from what the code does: keep in sync when data handling changes). `components/SiteFooter.tsx` (Privacy · Terms) on landing, login, account, legal pages; login notes agreement to the terms. Page `<main>`s use `w-full` — in the flex-column body, `mx-auto` alone shrank them to their content.

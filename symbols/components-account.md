@@ -10,3 +10,5 @@
 
 ## Notes / Findings
 - No FIXME/TODO/HACK comments found. New, minimal module.
+
+- `DeleteAccountButton({ hasSubscription })` (2026-11-01): dialog, type DELETE, `DELETE /api/account`, then Firebase `signOut` and `router.replace('/')`.

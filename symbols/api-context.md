@@ -23,3 +23,5 @@
 - No FIXME/TODO/HACK comments found.
 - The DNS-rebinding gap and the fetch-auto-follows-redirects-without-revalidation gap (TD-001, both closed 2026-09-15 via BL-024) are both now addressed by `resolvesToPrivateAddress()` + `safeFetch()`'s manual per-hop revalidation.
 - `pdf-parse`'s dynamic import (`await import('pdf-parse')`) is deliberate — see CONVENTIONS.md third-party library usage note. Do not hoist to a static top-level import.
+
+- 2026-11-01 (BL-040): both routes rate limited (30/hour per account) after the Pro check.

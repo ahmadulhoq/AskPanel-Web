@@ -26,3 +26,4 @@
 - Retry route clears `rounds: []` — a retry always starts the panel over from round 1, it does not resume from wherever it errored. This is a product decision, not a bug (an error mid-round means agent output for that round may be incomplete/untrustworthy).
 - 2026-11-01 (BL-048): `POST /api/panels/[panelId]/stop` → `stopPanel()` (401/404/409, `{ ok, refunded }`). Retry also clears `stoppedAt`.
 
+- 2026-11-01 (BL-040): `GET /api/panels?cursor=` (next page), `DELETE /api/panels/[panelId]` (`deletePanel`). Create/retry return 429 (`RateLimitedError`) past 20 debates/hour.

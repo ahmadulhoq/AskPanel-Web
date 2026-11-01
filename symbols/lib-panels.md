@@ -15,3 +15,7 @@
 ## Notes
 - Tests: `lib/panels/streamDiff.test.ts` (`npm test`).
 - Live text arrives in ~1s chunks (runner flush interval, Firestore's ~1 write/sec/doc guidance), not per token.
+
+2026-11-01 (BL-040):
+| `deletePanel(panelId, uid)` / `stopIfRunning(panelId, uid)` | delete.ts | Owner-only delete of a panel and its chat message (batch); a queued/running debate is stopped first (Stop refund rule). `stopIfRunning` ignores only `StopRejected` (already finished) — other failures abort the delete rather than skip a refund |
+| `listPanels(uid, cursor?)` / `PANEL_PAGE_SIZE` (20) | list.ts | Dashboard page, newest first, `orderBy(createdAt desc, __name__ desc)` (served by the existing userId+createdAt index). Returns `{ panels: PanelSummary[], next }`; `next` = exact `seconds.nanos.id` cursor, so deleting the cursor panel doesn't end paging |

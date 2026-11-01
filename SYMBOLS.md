@@ -1,6 +1,6 @@
 # Symbol Index: askpanel-web
 > Split mode — 26 modules. Full symbols live in `.memory/symbols/[module-name].md`.
-> Last updated: 2026-10-31 (incremental: background runs, billing, v2 M1 chat)
+> Last updated: 2026-11-01 (incremental: CI/e2e, chat settings/Stop/summary, launch basics)
 
 | Module | Files | Responsibility (one line) | Symbols file |
 |---|---|---|---|

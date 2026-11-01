@@ -1,5 +1,12 @@
 # Agent Changelog: askpanel-web
 
+## 2026-11-01 — BL-040: launch basics (PR #5)
+
+- /privacy + /terms (drafts written from the code; legal details → BL-050), footer links; delete account / panel / conversation; dashboard "Show more" with an exact cursor; per-account rate limits counted inside the reservation transactions.
+- Self-review found 9 issues, all fixed: deleting an account with an already-cancelled subscription would fail forever; per-IP sign-in limit bypassable via X-Forwarded-For and harmful behind shared IPs (now per account, after verification); failed attempts counted toward limits; panels created mid-deletion survived; deleted cursor ended paging; dashboard list ignored server refreshes; swallowed stop errors could skip refunds; duplicated try/catch.
+- Found by looking at screenshots: dashboard, chat list and account pages had shrunk to their content width (flex body + mx-auto) — pre-existing; fixed with w-full.
+- e2e: 16 runner scenarios, 24 browser checks; unit 38.
+
 ## 2026-11-01 — BL-048: chat debate settings, Stop, rolling summary (PR #4)
 
 - Persona/rounds for chat debates (composer chip + panel; remembered per conversation). Stop (route, runner lease watch + AbortSignal through the orchestrator so even the Synthesizer call is cancelled; refund only before round 1's verdict). Rolling summary (in-memory backlog after each reply; summary not counted against the reply budget; unsummarized slack stays visible).

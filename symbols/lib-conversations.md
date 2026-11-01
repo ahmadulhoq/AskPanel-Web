@@ -21,3 +21,5 @@
 | `titleConversation(cid, firstMessage)` | title.ts | Names a conversation via `generateTitle()`; best effort |
 
 Conversation doc fields added 2026-11-01 (BL-048): `summary`, `summarizedThroughSeq`, `debateSettings` (stored only when the client sends settings).
+
+- `deleteConversation(cid, uid)` (delete.ts, BL-040): stops its running debates in parallel, recursive-deletes the conversation (doc first, so in-flight message writes — which also update the conversation doc — fail), deletes its panels, then sweeps panels created meanwhile.
