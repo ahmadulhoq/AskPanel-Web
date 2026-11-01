@@ -216,8 +216,10 @@ export function ConversationView({
               key={m.id}
               panelId={m.panelId}
               initial={m.debate}
+              messageId={m.id}
               routing={m.routing}
               onAnswerInstead={m.routing ? () => answerInstead(m.id) : undefined}
+              busy={busy}
             />
           ) : (
             <AssistantReply key={m.id} message={m} onDebate={debateReply} debateDisabled={busy} />

@@ -1,11 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getSessionUser } from '@/lib/auth'
 import { createPanel } from '@/lib/panels/create'
-import { FreeLimitReachedError } from '@/lib/billing/runs'
-import { RateLimitedError, rateLimitedResponse } from '@/lib/limits/rateLimit'
+import { panelErrorResponse } from '@/lib/panels/errors'
 import { debateContext, replyHistory, REPLY_LOAD_MESSAGES } from '@/lib/conversations/context'
 import { sanitizeDebateSettings } from '@/lib/conversations/settings'
 import { logRouting } from '@/lib/conversations/routingLog'
+import { FieldValue } from 'firebase-admin/firestore'
+import { adminDb } from '@/lib/firebase/admin'
 import { getOwnedConversation, loadMessages, messagesRef, toMessageView } from '@/lib/conversations/store'
 import type { NewMessage } from '@/lib/conversations/store'
 
@@ -21,17 +22,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  const history = await loadMessages(cid, REPLY_LOAD_MESSAGES)
-  const index = history.findIndex((m) => m.id === mid)
-  const proposal = history[index]
-  if (!proposal || proposal.kind !== 'debate_proposal' || !proposal.routing) {
+  // Claim the proposal, so a double click or a second tab can't start (and charge) twice.
+  const ref = messagesRef(cid).doc(mid)
+  const CLAIM_MS = 60_000
+  const proposal = await adminDb().runTransaction(async (tx) => {
+    const data = (await tx.get(ref)).data() as (NewMessage & { claimedAt?: number }) | undefined
+    if (!data || data.kind !== 'debate_proposal' || !data.routing) return null
+    if (data.claimedAt && Date.now() - data.claimedAt < CLAIM_MS) return null
+    tx.update(ref, { claimedAt: Date.now() })
+    return data
+  })
+  if (!proposal?.routing) {
     return NextResponse.json({ error: 'That suggestion is no longer open.' }, { status: 409 })
   }
 
   const body = await request.json().catch(() => ({}))
   const settings = sanitizeDebateSettings(body.settings)
-  const summary = conversation.summary ?? null
-  const before = replyHistory(history.slice(0, index), conversation.summarizedThroughSeq ?? 0)
+  const history = await loadMessages(cid, REPLY_LOAD_MESSAGES, proposal.seq)
+  const before = replyHistory(history, conversation.summarizedThroughSeq ?? 0)
   let panelId: string
   try {
     panelId = await createPanel({
@@ -41,19 +49,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       persona: settings.persona,
       maxRounds: settings.maxRounds,
       mode: proposal.routing.mode,
-      userContext: debateContext(before, undefined, summary),
+      userContext: debateContext(before, undefined, conversation.summary ?? null),
       conversationId: cid,
       messageId: mid,
     })
   } catch (err) {
-    if (err instanceof FreeLimitReachedError) {
-      return NextResponse.json({ error: 'FREE_LIMIT_REACHED' }, { status: 402 })
-    }
-    if (err instanceof RateLimitedError) return rateLimitedResponse(err)
+    await ref.update({ claimedAt: FieldValue.delete() }).catch(() => {})
+    const refused = panelErrorResponse(err)
+    if (refused) return refused
     throw err
   }
 
-  await messagesRef(cid).doc(mid).update({ kind: 'debate', panelId })
+  await ref.update({ kind: 'debate', panelId, claimedAt: FieldValue.delete() })
   logRouting(user.uid, cid, mid, 'run_proposal', proposal.routing.mode)
   const message: NewMessage = {
     role: 'assistant', kind: 'debate', content: '', panelId, status: 'complete', seq: proposal.seq, routing: proposal.routing,

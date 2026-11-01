@@ -94,6 +94,11 @@ export async function* streamReply(
       input = null
     }
     const routing = parseRouting(input)
-    if (routing) yield { type: 'panel', routing }
+    if (routing) {
+      yield { type: 'panel', routing }
+      return
+    }
+    // The model wanted the panel but the call was unusable: answer directly instead.
+    yield* streamReply(messages, { allowPanel: false })
   }
 }

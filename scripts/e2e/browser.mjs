@@ -72,7 +72,9 @@ const ctx = await browser.newContext({ viewport: { width: 1280, height: 650 } })
 await ctx.addCookies([{ name: '__session', value: cookie, url: BASE }])
 const page = await ctx.newPage()
 const errors = []
-page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
+// Set while a step provokes an error on purpose (e.g. an expected 409).
+let expectErrors = false
+page.on('console', (m) => { if (m.type() === 'error' && !expectErrors) errors.push(m.text()) })
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message))
 // The thread's scroll container (ThreadScroller) — the first scrolling, overflowing div.
 const onScroller = (action) => page.evaluate((action) => {
@@ -245,9 +247,20 @@ try {
   await page.locator('textarea').fill('Should we open an office in Berlin?')
   await page.keyboard.press('Enter')
   await page.getByText('Panel deliberating…').waitFor({ timeout: 15000 })
-  check('Pro: the assistant starts the debate itself and says why', await page.getByText(/^Convening the panel/).count() >= 2)
+  check('Pro: the assistant starts the debate itself and says why',
+    await page.getByText(/^Convening the panel/).count() === 1 && await page.getByText(/^The assistant convened the panel/).count() === 1)
+  // Two "Just answer" requests at once (double click, two tabs): one answers, one is refused.
+  const mid = await page.locator('[data-message-id]').last().getAttribute('data-message-id')
+  expectErrors = true
+  const statuses = await page.evaluate(async ([path]) => {
+    const post = () => fetch(path, { method: 'POST' }).then(async (r) => { await r.text(); return r.status })
+    return (await Promise.all([post(), post()])).sort()
+  }, [`${new URL(convoUrl).pathname.replace('/chat/', '/api/conversations/')}/messages/${mid}/answer`])
+  await page.waitForTimeout(300)
+  expectErrors = false
+  check('two simultaneous "Just answer" requests produce one answer', JSON.stringify(statuses) === '[200,409]', JSON.stringify(statuses))
   const repliesNow = await page.locator('h2', { hasText: 'reply view' }).count()
-  await page.getByRole('button', { name: 'Just answer' }).click()
+  await page.reload()
   await page.locator('h2', { hasText: 'reply view' }).nth(repliesNow).waitFor({ timeout: 15000 })
   check('"Just answer" on a running debate stops it and answers directly', await page.getByText('Panel deliberating…').count() === 0)
   await fake('/__control', { tokenDelayMs: 10 })

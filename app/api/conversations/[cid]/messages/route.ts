@@ -3,6 +3,8 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
 import { createPanel } from '@/lib/panels/create'
+import { stopIfRunning } from '@/lib/panels/delete'
+import { panelErrorResponse } from '@/lib/panels/errors'
 import { FreeLimitReachedError } from '@/lib/billing/runs'
 import { limitInTransaction, RateLimitedError, rateLimitedResponse } from '@/lib/limits/rateLimit'
 import { reserveReply, ReplyLimitReachedError, FREE_DAILY_REPLIES } from '@/lib/billing/replies'
@@ -74,10 +76,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         messageId: assistantRef.id,
       })
     } catch (err) {
-      if (err instanceof FreeLimitReachedError) {
-        return NextResponse.json({ error: 'FREE_LIMIT_REACHED' }, { status: 402 })
-      }
-      if (err instanceof RateLimitedError) return rateLimitedResponse(err)
+      const refused = panelErrorResponse(err)
+      if (refused) return refused
       throw err
     }
     const assistantMessage: NewMessage = { ...userMessage, role: 'assistant', kind: 'debate', content: '', panelId, seq: seq + 1 }
@@ -144,7 +144,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           messageId: assistantRef.id,
         })
         const debate: NewMessage = { ...assistantMessage, kind: 'debate', content: '', panelId, status: 'complete', routing }
-        await assistantRef.update({ kind: 'debate', content: '', panelId, status: 'complete', routing })
+        try {
+          await assistantRef.update({ kind: 'debate', content: '', panelId, status: 'complete', routing })
+        } catch (err) {
+          // Don't leave a debate running that the conversation can't show.
+          await stopIfRunning(panelId, user.uid).catch(() => {})
+          throw err
+        }
         logRouting(user.uid, cid, assistantRef.id, 'debate', routing.mode)
         return toMessageView(assistantRef.id, debate, { status: 'queued', finalAnswer: null, confidence: null })
       } catch (err) {
@@ -167,8 +173,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     after: async ({ text, status, routed }) => {
       if (!routed && status === 'complete') logRouting(user.uid, cid, assistantRef.id, 'answer')
       if (isFirstMessage) await titleConversation(cid, content)
-      const replied = toMessageView(assistantRef.id, { ...assistantMessage, content: text, status })
-      if (!routed) await updateSummary(cid, { history: [...history, userView, replied], summary, summarizedThroughSeq })
+      const replied = routed ? null : toMessageView(assistantRef.id, { ...assistantMessage, content: text, status })
+      await updateSummary(cid, { history: [...history, userView, ...(replied ? [replied] : [])], summary, summarizedThroughSeq })
     },
   })
 }
