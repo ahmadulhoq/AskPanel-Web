@@ -60,7 +60,7 @@ export async function createPanel(input: CreatePanelInput): Promise<string> {
   const panelId = nanoid(12)
   await db.runTransaction(async (tx) => {
     const countDebate = await limitInTransaction(tx, 'debate', uid)
-    const { tier, userData } = await reserveRun(tx, userRef, Date.now())
+    const { tier, userData, windowEndsAt } = await reserveRun(tx, userRef, Date.now())
     countDebate()
 
     // Free → max 2 rounds, Pro → max 3.
@@ -102,6 +102,7 @@ export async function createPanel(input: CreatePanelInput): Promise<string> {
       confidence: null,
       errorMessage: null,
       runCounted: true,
+      runWindowEndsAt: windowEndsAt,
     })
   })
 

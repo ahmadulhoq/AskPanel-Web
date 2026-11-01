@@ -45,12 +45,13 @@ export default async function PanelPage({ params }: Props) {
             </Button>
           </Link>
           <div className="flex items-center gap-1">
-            <ShareDebateButton
+            {/* /p/ shows finished debates only: a failed or stopped one can't be shared. */}
+            {(panel.status !== 'error' || panel.isPublic) && <ShareDebateButton
               panelId={panelId}
               initialIsPublic={!!panel.isPublic}
               inConversation={!!panel.conversationId}
               finished={panel.status === 'complete'}
-            />
+            />}
             <ConfirmDeleteButton
               what="panel"
               endpoint={`/api/panels/${panelId}`}
@@ -66,7 +67,7 @@ export default async function PanelPage({ params }: Props) {
       <ThreadScroller className="mx-auto w-full max-w-2xl px-4 py-8">
         <QuestionBubble question={panel.question} />
         {/* Follow-ups happen in the conversation the debate belongs to. */}
-        <PanelThread panelId={panelId} persona={panel.persona ?? 'general'} isPublic={panel.isPublic} showFollowUp={!panel.conversationId} />
+        <PanelThread panelId={panelId} persona={panel.persona ?? 'general'} showFollowUp={!panel.conversationId} />
         {panel.conversationId && (
           <p className="mt-8 text-center text-sm">
             <Link href={`/chat/${panel.conversationId}`} className="text-muted-foreground underline underline-offset-4 hover:text-foreground">

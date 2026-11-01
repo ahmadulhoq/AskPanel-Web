@@ -99,6 +99,8 @@ export interface PanelDoc {
   live?: LiveTurn | null
   run?: RunLease | null
   runCounted?: boolean
+  // End of the allowance window the run was counted in (ms); refunds only apply within it.
+  runWindowEndsAt?: number
   // Set when the owner pressed Stop (status is then 'error').
   stoppedAt?: number | null
   mode?: PanelMode

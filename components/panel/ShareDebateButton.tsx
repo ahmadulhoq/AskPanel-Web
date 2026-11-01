@@ -25,6 +25,12 @@ const linkFor = (panelId: string) => `${process.env.NEXT_PUBLIC_APP_URL || windo
 // debates are readable by anyone with the link at /p/[panelId].
 export function ShareDebateButton({ panelId, initialIsPublic, inConversation, look = 'button', finished = true }: Props) {
   const [isPublic, setIsPublic] = useState(initialIsPublic)
+  // Fresh data from the server (e.g. shared from the panel page, then back to the chat).
+  const [seen, setSeen] = useState(initialIsPublic)
+  if (seen !== initialIsPublic) {
+    setSeen(initialIsPublic)
+    setIsPublic(initialIsPublic)
+  }
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)

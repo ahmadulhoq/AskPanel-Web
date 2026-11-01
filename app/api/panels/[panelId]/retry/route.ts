@@ -2,10 +2,11 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
 import { DEFAULT_MODEL } from '@/lib/anthropic'
-import { reserveRun, FreeLimitReachedError, ProLimitReachedError, proLimitMessage } from '@/lib/billing/runs'
+import { reserveRun, FreeLimitReachedError } from '@/lib/billing/runs'
+import { panelErrorResponse } from '@/lib/panels/errors'
 import { runPanelJob } from '@/lib/agents/runner'
 import { emptyCompare } from '@/lib/agents/compareState'
-import { limitInTransaction, RateLimitedError, rateLimitedResponse } from '@/lib/limits/rateLimit'
+import { limitInTransaction } from '@/lib/limits/rateLimit'
 
 class RetryRejected extends Error {
   constructor(readonly status: number, message: string) {
@@ -37,7 +38,7 @@ export async function POST(
 
       const countDebate = await limitInTransaction(tx, 'debate', user.uid)
       // The failed run was refunded, so a retry counts as a new run.
-      await reserveRun(tx, userRef, Date.now())
+      const { windowEndsAt } = await reserveRun(tx, userRef, Date.now())
       countDebate()
 
       // Start over from round 1.
@@ -53,6 +54,7 @@ export async function POST(
         stoppedAt: null,
         compare: data.mode === 'compare' ? emptyCompare() : null,
         runCounted: true,
+        runWindowEndsAt: windowEndsAt,
         'config.model': DEFAULT_MODEL,
       })
     })
@@ -60,14 +62,15 @@ export async function POST(
     if (err instanceof RetryRejected) {
       return NextResponse.json({ error: err.message }, { status: err.status })
     }
-    if (err instanceof RateLimitedError) return rateLimitedResponse(err)
-    if (err instanceof ProLimitReachedError) return NextResponse.json({ error: proLimitMessage(err.resetAt) }, { status: 429 })
+    // Free: a sentence the retry button can show, rather than the upgrade dialog's code.
     if (err instanceof FreeLimitReachedError) {
       return NextResponse.json(
         { error: "You've used your free runs for this month. Upgrade to Pro to retry." },
         { status: 402 },
       )
     }
+    const refused = panelErrorResponse(err)
+    if (refused) return refused
     throw err
   }
 

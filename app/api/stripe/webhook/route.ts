@@ -3,7 +3,7 @@ import type Stripe from 'stripe'
 import { Timestamp, type DocumentReference } from 'firebase-admin/firestore'
 import { getStripe } from '@/lib/stripe'
 import { adminDb } from '@/lib/firebase/admin'
-import { subscriptionFields, shouldApply } from '@/lib/billing/subscription'
+import { subscriptionFields, shouldApply, allowanceOnTierChange } from '@/lib/billing/subscription'
 
 // Events to enable on the Stripe webhook endpoint.
 const SUBSCRIPTION_EVENTS = new Set([
@@ -72,6 +72,7 @@ async function syncSubscription(subscriptionId: string, uidHint: string | undefi
       'subscription.stripeSubscriptionId': fields.subscriptionId,
       'subscription.currentPeriodEnd': fields.currentPeriodEndMs ? Timestamp.fromMillis(fields.currentPeriodEndMs) : null,
       'subscription.cancelAtPeriodEnd': fields.cancelAtPeriodEnd,
+      ...allowanceOnTierChange(current?.tier, fields.tier),
     })
   })
 }

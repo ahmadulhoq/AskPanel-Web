@@ -55,7 +55,9 @@ export async function reserveRun(tx: Transaction, userRef: DocumentReference, no
 
   updates.freeRunsUsed = used + 1
   tx.update(userRef, updates)
-  return { tier, userData }
+  // `windowEndsAt` goes on the panel (runWindowEndsAt), so a refund can tell which window
+  // the run was counted in.
+  return { tier, userData, windowEndsAt: resetAt }
 }
 
 // What's left of the user's allowance, for display. A window whose reset date has passed
@@ -69,7 +71,8 @@ export function allowance(userData: DocumentData | undefined, now = Date.now()) 
 }
 
 // Gives back a counted run when the panel fails. Idempotent: the panel's runCounted flag
-// is cleared in the same transaction. Returns whether a run was actually given back.
+// is cleared in the same transaction. A run counted in a window that has since reset isn't
+// given back (the new window never counted it). Returns whether a run was given back.
 export async function refundRun(panelId: string): Promise<boolean> {
   const db = adminDb()
   const panelRef = db.collection('panels').doc(panelId)
@@ -77,9 +80,11 @@ export async function refundRun(panelId: string): Promise<boolean> {
     const panel = (await tx.get(panelRef)).data()
     if (!panel?.runCounted) return false
     const userRef = db.collection('users').doc(panel.userId)
-    const used: number = (await tx.get(userRef)).data()?.freeRunsUsed ?? 0
-    tx.update(userRef, { freeRunsUsed: Math.max(0, used - 1) })
+    const user = (await tx.get(userRef)).data()
+    // Panels from before runWindowEndsAt existed: refunded as before.
+    const sameWindow = !panel.runWindowEndsAt || user?.freeRunsResetAt?.toMillis() === panel.runWindowEndsAt
+    if (sameWindow) tx.update(userRef, { freeRunsUsed: Math.max(0, (user?.freeRunsUsed ?? 0) - 1) })
     tx.update(panelRef, { runCounted: false })
-    return true
+    return sameWindow
   })
 }

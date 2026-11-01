@@ -232,17 +232,18 @@ await scenario('11. rolling summary: folds messages that left the reply window, 
 
 await scenario('12. Stop while the Synthesizer call is pending aborts it', async () => {
   await fake('/__control', { tokenDelayMs: 5, synthDelayMs: 10000 })
-  await makeUser('u12', 'pro', 0); await makePanel('p12', 'u12')
+  await makeUser('u12', 'pro', 1); await makePanel('p12', 'u12', { runCounted: true })
   const running = runPanelJob('p12')
   await until(async () => (await panel('p12'))?.rounds?.[0]?.critic, 'critic to finish')
   await sleep(300) // synthesizer request in flight
   const t0 = Date.now()
-  assert.deepEqual(await stopPanel('p12', 'u12'), { refunded: false }, 'Pro runs are not counted, so nothing is refunded')
+  assert.deepEqual(await stopPanel('p12', 'u12'), { refunded: true }, 'stopped before the round-1 verdict: a Pro run is refunded too')
   await running
   assert.ok(Date.now() - t0 < 3000, `runner took ${Date.now() - t0}ms to stop`)
   const p = await panel('p12')
   assert.equal(p.status, 'error'); assert.equal(p.errorMessage, STOPPED_MESSAGE)
   assert.equal(p.rounds[0].synthesizer ?? null, null)
+  assert.equal((await user('u12')).freeRunsUsed, 0)
 })
 
 await scenario('13. rate limits: the 21st reply in a minute is refused; failed debate attempts are not counted', async () => {
@@ -465,6 +466,10 @@ await scenario('24. Pro: 100 debates per 30 days, counted and refunded like free
   const ref = db.collection('users').doc('u29')
   await db.runTransaction((tx) => reserveRun(tx, ref, Date.now()))
   assert.equal((await user('u29')).freeRunsUsed, 1, 'a new window starts at 1')
+  // A run counted in the previous window fails after the reset: nothing to give back now.
+  await makePanel('p24old', 'u29', { runCounted: true, runWindowEndsAt: Date.now() - 1000 })
+  assert.equal(await refundRun('p24old'), false)
+  assert.equal((await user('u29')).freeRunsUsed, 1); assert.equal((await panel('p24old')).runCounted, false)
 })
 
 await scenario('25. sharing a debate: only its owner can turn the link on or off', async () => {

@@ -12,7 +12,6 @@ import type { ConfidenceLevel } from '@/types'
 interface Props {
   panelId: string
   persona?: string
-  isPublic?: boolean
   // Inside a conversation the chat input replaces the follow-up box.
   showFollowUp?: boolean
   // Show a Stop button while the debate runs (off when the parent renders its own).
@@ -22,7 +21,7 @@ interface Props {
 }
 
 export function PanelThread({
-  panelId, persona = 'general', isPublic = true, showFollowUp = true, canStop = true, onComplete, onError,
+  panelId, persona = 'general', showFollowUp = true, canStop = true, onComplete, onError,
 }: Props) {
   const state = usePanel(panelId)
 
@@ -58,7 +57,7 @@ export function PanelThread({
         <>
           <FinalAnswer answer={state.finalAnswer} confidence={state.confidence} panelId={panelId} />
           {showFollowUp && (
-            <FollowUpComposer parentPanelId={panelId} parentPersona={persona} parentIsPublic={isPublic} />
+            <FollowUpComposer parentPanelId={panelId} parentPersona={persona} />
           )}
         </>
       )}

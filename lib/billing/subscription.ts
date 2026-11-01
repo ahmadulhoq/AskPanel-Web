@@ -39,3 +39,9 @@ export function shouldApply(currentSubscriptionId: string | null, incoming: Subs
   if (!currentSubscriptionId || currentSubscriptionId === incoming.subscriptionId) return true
   return incoming.tier === 'pro'
 }
+
+// Free and Pro share one debate counter. When Pro ends, the free allowance starts fresh:
+// debates run under Pro's 100 shouldn't use up the 5 free ones. (Upgrading keeps the count.)
+export function allowanceOnTierChange(from: 'free' | 'pro' | undefined, to: 'free' | 'pro'): Record<string, unknown> {
+  return from === 'pro' && to === 'free' ? { freeRunsUsed: 0, freeRunsResetAt: null } : {}
+}

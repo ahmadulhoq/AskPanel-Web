@@ -226,7 +226,8 @@ try {
   await shareDialog.getByRole('button', { name: 'Stop sharing' }).click()
   await shareDialog.waitFor({ state: 'hidden', timeout: 10000 })
   check('after Stop sharing, the link no longer works', (await visitor.goto(BASE + sharedPath)).status() === 404)
-  check('the debate shows as not shared again', await page.getByRole('button', { name: 'Share debate' }).count() === 2)
+  const sharedBlock = page.locator(`[data-panel-id="${sharedPath.split('/').pop()}"]`).first()
+  check('the debate shows as not shared again', await sharedBlock.getByRole('button', { name: 'Share debate' }).count() === 1)
   await anon.close()
 
   // Stop a running debate.
