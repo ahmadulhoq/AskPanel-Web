@@ -1,0 +1,72 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { newCursor, diffPanel, type PanelView } from './streamDiff.ts'
+
+const view = (over: Partial<PanelView>): PanelView => ({
+  status: 'running',
+  rounds: [],
+  live: null,
+  finalAnswer: null,
+  confidence: null,
+  errorMessage: null,
+  ...over,
+})
+
+const r1Done = {
+  roundNumber: 1,
+  respondent: { content: 'R1' },
+  critic: { content: 'C1' },
+  synthesizer: { decision: 'consensus' as const, confidence: 'high' as const, reasoning: 'agree', issuesFound: 2 },
+}
+
+test('a completed panel replays every step then completes', () => {
+  const cursor = newCursor()
+  const events = diffPanel(cursor, view({ status: 'complete', rounds: [r1Done], finalAnswer: 'FA', confidence: 'high' }))
+  assert.deepEqual(events.map(e => e.type), [
+    'agent_start', 'agent_complete', 'agent_start', 'agent_complete',
+    'synthesis_start', 'synthesis_result', 'panel_complete',
+  ])
+  assert.equal(cursor.done, true)
+  assert.deepEqual(events.at(-1), { type: 'panel_complete', finalAnswer: 'FA', confidence: 'high' })
+})
+
+test('live text streams as deltas and completes without a second start', () => {
+  const cursor = newCursor()
+  const live = (content: string) => ({ agent: 'respondent' as const, round: 1, content, runId: 'a' })
+
+  assert.deepEqual(diffPanel(cursor, view({ live: live('Hel') })), [
+    { type: 'agent_start', agent: 'respondent', round: 1 },
+    { type: 'agent_token', agent: 'respondent', token: 'Hel' },
+  ])
+  assert.deepEqual(diffPanel(cursor, view({ live: live('Hello') })), [
+    { type: 'agent_token', agent: 'respondent', token: 'lo' },
+  ])
+  const stored = [{ roundNumber: 1, respondent: { content: 'Hello!' }, critic: null, synthesizer: null }]
+  assert.deepEqual(diffPanel(cursor, view({ rounds: stored, live: live('Hello') })), [
+    { type: 'agent_complete', agent: 'respondent', round: 1, content: 'Hello!' },
+  ])
+})
+
+test('a restarted turn re-sends agent_start and the full text', () => {
+  const cursor = newCursor()
+  diffPanel(cursor, view({ live: { agent: 'critic', round: 1, content: 'long partial text', runId: 'a' } }))
+  assert.deepEqual(diffPanel(cursor, view({ live: { agent: 'critic', round: 1, content: 'Re', runId: 'b' } })), [
+    { type: 'agent_start', agent: 'critic', round: 1 },
+    { type: 'agent_token', agent: 'critic', token: 'Re' },
+  ])
+})
+
+test('the same snapshot twice emits nothing the second time', () => {
+  const cursor = newCursor()
+  const snap = view({ rounds: [{ ...r1Done, synthesizer: null }], live: { agent: 'critic', round: 1, content: 'C1', runId: 'a' } })
+  assert.ok(diffPanel(cursor, snap).length > 0)
+  assert.deepEqual(diffPanel(cursor, snap), [])
+})
+
+test('a queued panel with no progress emits nothing; an error ends the stream', () => {
+  const cursor = newCursor()
+  assert.deepEqual(diffPanel(cursor, view({ status: 'queued' })), [])
+  assert.deepEqual(diffPanel(cursor, view({ status: 'error', errorMessage: 'boom' })), [{ type: 'error', message: 'boom' }])
+  assert.equal(cursor.done, true)
+  assert.deepEqual(diffPanel(cursor, view({ status: 'error', errorMessage: 'boom' })), [])
+})

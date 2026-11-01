@@ -2,6 +2,11 @@ runConfig:
   timeoutSeconds: 300
   minInstances: 0
   maxInstances: 10
+  # Debates run in the background after the request that started them ends. With
+  # request-based CPU, Cloud Run throttles that work to near zero once no request is
+  # in flight; debates would then only progress while someone is watching (they still
+  # resume correctly on return). Costs more: CPU is billed for the instance's lifetime.
+  cpuAlwaysAllocated: true
 
 env:
   # ── Firebase (public — baked into client bundle) ──────────────────────────

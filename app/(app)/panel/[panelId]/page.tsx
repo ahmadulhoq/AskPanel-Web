@@ -4,6 +4,8 @@ import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
 import { PanelThread } from '@/components/panel/PanelThread'
 import { QuestionBubble } from '@/components/panel/QuestionBubble'
+import { ShareButton } from '@/components/panel/ShareButton'
+import { ThreadScroller } from '@/components/panel/ThreadScroller'
 import { Button } from '@/components/ui/button'
 import type { PanelDoc } from '@/types'
 
@@ -16,7 +18,8 @@ export async function generateMetadata({ params }: Props) {
   const db = adminDb()
   const snap = await db.collection('panels').doc(panelId).get()
   const panel = snap.data() as PanelDoc | undefined
-  return { title: panel ? `${panel.question.slice(0, 60)}… — AskPanel` : 'Panel — AskPanel' }
+  const title = panel?.title ?? panel?.question.slice(0, 60)
+  return { title: title ? `${title} — AskPanel` : 'Panel — AskPanel' }
 }
 
 export default async function PanelPage({ params }: Props) {
@@ -31,33 +34,25 @@ export default async function PanelPage({ params }: Props) {
   const panel = snap.data() as PanelDoc
   if (panel.userId !== user.uid) redirect('/dashboard')
 
-  const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}/p/${panelId}`
+  const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/p/${panelId}`
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-sm">
+    <div className="flex h-dvh flex-col">
+      <header className="z-10 border-b bg-background/80 backdrop-blur-sm">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
           <Link href="/dashboard">
             <Button variant="ghost" size="sm" className="-ml-2 text-muted-foreground hover:text-foreground">
               ← Dashboard
             </Button>
           </Link>
-          <Button
-            variant="outline"
-            size="sm"
-            data-share-url={shareUrl}
-            id="share-btn"
-          >
-            Share
-          </Button>
+          {panel.isPublic && <ShareButton url={shareUrl} />}
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
+      <ThreadScroller className="mx-auto w-full max-w-2xl px-4 py-8">
         <QuestionBubble question={panel.question} />
-
-        <PanelThread panelId={panelId} />
-      </main>
+        <PanelThread panelId={panelId} persona={panel.persona ?? 'general'} isPublic={panel.isPublic} />
+      </ThreadScroller>
     </div>
   )
 }

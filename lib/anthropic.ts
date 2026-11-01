@@ -9,4 +9,4 @@ export function getAnthropicClient(): Anthropic {
   return _client
 }
 
-export const DEFAULT_MODEL = 'claude-sonnet-4-5'
+export const DEFAULT_MODEL = 'claude-sonnet-5-5'

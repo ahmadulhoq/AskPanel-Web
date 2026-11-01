@@ -1,12 +1,24 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import type Stripe from 'stripe'
+import { Timestamp, type DocumentReference } from 'firebase-admin/firestore'
 import { getStripe } from '@/lib/stripe'
 import { adminDb } from '@/lib/firebase/admin'
-import type Stripe from 'stripe'
-import { Timestamp } from 'firebase-admin/firestore'
+import { subscriptionFields, shouldApply } from '@/lib/billing/subscription'
+
+// Events to enable on the Stripe webhook endpoint.
+const SUBSCRIPTION_EVENTS = new Set([
+  'checkout.session.completed',
+  'customer.subscription.created',
+  'customer.subscription.updated',
+  'customer.subscription.deleted',
+])
 
 export async function POST(request: NextRequest) {
   const body = await request.text()
-  const sig = request.headers.get('stripe-signature')!
+  const sig = request.headers.get('stripe-signature')
+  if (!sig) {
+    return NextResponse.json({ error: 'Missing signature' }, { status: 400 })
+  }
 
   let event: Stripe.Event
   try {
@@ -15,50 +27,67 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
-  const db = adminDb()
-
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object as Stripe.Checkout.Session
-    const uid = session.metadata?.uid
-    if (!uid) return NextResponse.json({ ok: true })
-
-    const subscriptionId = session.subscription as string
-    const subscription = await getStripe().subscriptions.retrieve(subscriptionId)
-
-    const userRef = db.collection('users').doc(uid)
-    const snap = await userRef.get()
-    // Idempotency: skip if already set to this subscription
-    if (snap.data()?.subscription?.stripeSubscriptionId === subscriptionId) {
-      return NextResponse.json({ ok: true })
-    }
-
-    await userRef.update({
-      'subscription.tier': 'pro',
-      'subscription.stripeCustomerId': session.customer as string,
-      'subscription.stripeSubscriptionId': subscriptionId,
-      'subscription.currentPeriodEnd': Timestamp.fromMillis(
-        subscription.items.data[0].current_period_end * 1000,
-      ),
-    })
+  if (!SUBSCRIPTION_EVENTS.has(event.type)) {
+    return NextResponse.json({ ok: true })
   }
 
-  if (event.type === 'customer.subscription.deleted') {
-    const subscription = event.data.object as Stripe.Subscription
-    // Find user by stripeSubscriptionId
-    const snap = await db
-      .collection('users')
-      .where('subscription.stripeSubscriptionId', '==', subscription.id)
-      .limit(1)
-      .get()
-
-    if (!snap.empty) {
-      await snap.docs[0].ref.update({
-        'subscription.tier': 'free',
-        'subscription.stripeSubscriptionId': null,
-        'subscription.currentPeriodEnd': null,
-      })
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as Stripe.Checkout.Session
+      if (session.mode === 'subscription' && session.subscription) {
+        const id = typeof session.subscription === 'string' ? session.subscription : session.subscription.id
+        await syncSubscription(id, session.metadata?.uid)
+      }
+    } else {
+      const sub = event.data.object as Stripe.Subscription
+      await syncSubscription(sub.id, sub.metadata?.uid)
     }
+  } catch (err) {
+    console.error('[stripe] webhook processing failed', event.id, event.type, err)
+    // A non-2xx response makes Stripe retry the event.
+    return NextResponse.json({ error: 'Processing failed' }, { status: 500 })
   }
 
   return NextResponse.json({ ok: true })
+}
+
+// Applies the subscription's *current* state from Stripe rather than the event payload,
+// so duplicate, late or out-of-order events all converge on the same result.
+async function syncSubscription(subscriptionId: string, uidHint: string | undefined) {
+  const sub = await getStripe().subscriptions.retrieve(subscriptionId)
+  const fields = subscriptionFields(sub)
+  const userRef = await findUser(uidHint ?? sub.metadata?.uid, fields.subscriptionId, fields.customerId)
+  if (!userRef) {
+    console.warn('[stripe] no user for subscription', fields.subscriptionId)
+    return
+  }
+
+  await adminDb().runTransaction(async (tx) => {
+    const current = (await tx.get(userRef)).data()?.subscription
+    if (!shouldApply(current?.stripeSubscriptionId ?? null, fields)) return
+    tx.update(userRef, {
+      'subscription.tier': fields.tier,
+      'subscription.status': fields.status,
+      'subscription.stripeCustomerId': fields.customerId,
+      'subscription.stripeSubscriptionId': fields.subscriptionId,
+      'subscription.currentPeriodEnd': fields.currentPeriodEndMs ? Timestamp.fromMillis(fields.currentPeriodEndMs) : null,
+      'subscription.cancelAtPeriodEnd': fields.cancelAtPeriodEnd,
+    })
+  })
+}
+
+async function findUser(uid: string | undefined, subscriptionId: string, customerId: string): Promise<DocumentReference | null> {
+  const users = adminDb().collection('users')
+  if (uid) {
+    const ref = users.doc(uid)
+    if ((await ref.get()).exists) return ref
+  }
+  for (const [field, value] of [
+    ['subscription.stripeSubscriptionId', subscriptionId],
+    ['subscription.stripeCustomerId', customerId],
+  ] as const) {
+    const snap = await users.where(field, '==', value).limit(1).get()
+    if (!snap.empty) return snap.docs[0].ref
+  }
+  return null
 }

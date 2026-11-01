@@ -1,10 +1,8 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app'
 import { getAuth, type Auth } from 'firebase/auth'
-import { getFirestore, type Firestore } from 'firebase/firestore'
 
 let _app: FirebaseApp | null = null
 let _auth: Auth | null = null
-let _db: Firestore | null = null
 
 function getApp(): FirebaseApp {
   if (!_app) {
@@ -25,9 +23,4 @@ function getApp(): FirebaseApp {
 export function getFirebaseAuth(): Auth {
   if (!_auth) _auth = getAuth(getApp())
   return _auth
-}
-
-export function getFirebaseDb(): Firestore {
-  if (!_db) _db = getFirestore(getApp())
-  return _db
 }

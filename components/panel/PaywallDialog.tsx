@@ -42,10 +42,10 @@ export function PaywallDialog({ open, onClose }: Props) {
           <p className="text-2xl font-bold">$15 <span className="text-base font-normal text-muted-foreground">/ month</span></p>
           <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
             <li>✓ 100 panel runs / month</li>
-            <li>✓ All personas</li>
-            <li>✓ Custom personas</li>
-            <li>✓ File upload (coming soon)</li>
-            <li>✓ Panel history</li>
+            <li>✓ All 5 personas</li>
+            <li>✓ Up to 3 debate rounds</li>
+            <li>✓ URL & text context injection</li>
+            <li>✓ Export panels as Markdown</li>
           </ul>
         </div>
         <div className="flex gap-2">

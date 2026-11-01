@@ -55,6 +55,7 @@ export default async function PublicPanelPage({ params }: Props) {
         decision: round.synthesizer.decision as SynthesisDecision,
         confidence: round.synthesizer.confidence as ConfidenceLevel,
         reasoning: round.synthesizer.reasoning,
+        issuesFound: round.synthesizer.issuesFound ?? 0,
       })
     }
   }
@@ -87,9 +88,14 @@ export default async function PublicPanelPage({ params }: Props) {
               )}
               {turns
                 .filter(t => t.round === round)
-                .map((turn, i) => (
-                  <AgentTurn key={i} turn={turn} />
-                ))}
+                .map((turn, i) => {
+                  const sameSynthesis = turn.agent === 'critic'
+                    ? syntheses.find(s => s.round === round)
+                    : undefined
+                  return (
+                    <AgentTurn key={i} turn={turn} issuesFound={sameSynthesis?.issuesFound} />
+                  )
+                })}
               {syntheses
                 .filter(s => s.round === round)
                 .map(s => (

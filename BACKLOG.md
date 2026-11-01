@@ -7,26 +7,21 @@
 
 | ID | Priority | Title | Added | Jira Ticket | Notes |
 |----|----------|-------|-------|-------------|-------|
-| BL-001 | P0 | Run cartographer workflow to build codebase memory | 2026-05-24 | | Setup prerequisite |
-| BL-004 | P0 | Rotate exposed Firebase API key & add GCP restrictions | 2026-05-25 | | Key `AIzaSyCATAGc0Qq...` committed in plain text in 9f2f479d; rotate in GCP Console, apply HTTP referrer + API restrictions, move to Secret Manager in apphosting.yaml, dismiss GitHub secret scanning alert |
-| BL-005 | P0 | Fix inert Share button on panel page | 2026-05-31 | | `id="share-btn"` exists in the DOM with a `data-share-url` attribute but has no JS handler — clicking it does nothing. Should copy link to clipboard or open native share sheet |
-| BL-002 | P1 | Deploy to Firebase App Hosting | 2026-05-24 | | Requires GitHub connection via Firebase Console |
-| BL-003 | P1 | Set up Stripe webhook endpoint in production | 2026-05-24 | | After live URL known |
-| BL-006 | P1 | Add sign-out button to dashboard | 2026-05-31 | | `signOut()` exists in `useAuth` but is not surfaced anywhere in the UI; users are trapped until the 14-day session cookie expires |
-| BL-007 | P1 | Privacy toggle — let users make a panel private | 2026-05-31 | | Schema has `isPublic` but it is hardcoded to `true` in POST /api/panels. Add a checkbox to PanelInput. High-stakes users (career, health, legal questions) need this before they'll trust the product |
-| BL-008 | P1 | Copy final answer to clipboard | 2026-05-31 | | Single button on FinalAnswer component; the answer is long-form markdown and users need to take it somewhere else to act on it |
-| BL-009 | P1 | Suggested starter questions / example chips on dashboard | 2026-05-31 | | New users land on a blank textarea with no guidance. 5–6 clickable example questions (career, business, technical, ethical) reduce time-to-first-run and demonstrate what the product is for |
-| BL-010 | P1 | Reconnect mid-run: replay stored rounds on SSE open | 2026-05-31 | | If user navigates away during a run, reconnecting opens a new stream but in-progress turns stored in Firestore are never replayed. Must seed PanelThread with existing `rounds[]` data before the SSE takes over |
-| BL-011 | P1 | Follow-up question composer after panel completes | 2026-05-31 | | After reading a final answer the user has nowhere to go. Show a second PanelInput pre-seeded with the original question + final answer as context so users can drill deeper without starting from scratch |
-| BL-012 | P1 | Auto-generated panel title for dashboard history | 2026-05-31 | | Dashboard truncates the raw question to ~60 chars which reads poorly for longer questions. Call Claude once post-completion to produce a 5–8 word title; store as `panels/{id}.title` |
-| BL-013 | P1 | Domain-specific panel personas (Respondent/Critic role prompts) | 2026-05-31 | | PaywallDialog already promises "all personas" and "custom personas" as Pro features. Pre-defined sets: General (current), Startup Advisor, Devil's Advocate, Legal Lens, Technical Audit. Each is just a different system prompt passed to orchestrator. Gate custom personas behind Pro |
-| BL-014 | P2 | Monthly run reset — change free limit from lifetime to monthly | 2026-05-31 | | `freeRunsUsed` is a lifetime counter and never resets. A user who tried the product during evaluation and hit 5 runs can never return without paying. Switch to a monthly bucket (5 runs / month, reset on billing date) to allow re-evaluation. Requires a `freeRunsResetAt` Timestamp on the user doc |
-| BL-015 | P2 | File / URL context input | 2026-05-31 | | PaywallDialog lists "File upload (coming soon)". Let users paste a URL or upload a PDF/text file; extract text server-side and prepend as context to the question sent to the orchestrator. Pro-only |
-| BL-016 | P2 | Panel export — download as Markdown or PDF | 2026-05-31 | | Target use case: user pressure-tests a strategy and wants to share the full deliberation with colleagues. A "Download" button on the completed panel page. Markdown is trivial (concatenate turns); PDF via a headless render or `@react-pdf/renderer` |
-| BL-017 | P2 | Onboarding tour for new users | 2026-05-31 | | First-time users don't know what Respondent / Critic / Synthesizer are. A one-time tooltip sequence (or a short "how it works" panel before first run) anchored to the live thread would set expectations and reduce churn after the first confusing result |
-| BL-018 | P2 | Public panel discovery / gallery | 2026-05-31 | | All panels are public by default. A curated or algorithmic gallery of interesting deliberations could be a growth loop — users share panels, readers discover the product. Needs moderation strategy before shipping |
-| BL-019 | P2 | User-configurable max rounds (1–3) | 2026-05-31 | | `maxRounds` is hardcoded to 2 in POST /api/panels. Simple questions should resolve in 1 round (faster, cheaper). Complex ones may need 3. Expose as an advanced option; cap at 3 for Pro, 1 for free |
-| BL-020 | P2 | Account management page (cancel subscription, delete account) | 2026-05-31 | | No account page exists. Users who want to cancel have no self-serve path. Stripe customer portal redirect covers cancellation; account deletion needs Firestore + Firebase Auth cleanup |
+| BL-004 | P0 | Add GCP HTTP referrer restrictions to Firebase API key | 2026-05-25 | | In GCP Console → Credentials → browser key, add `https://askpanel.app/*` as allowed referrer; dismiss GitHub secret scanning alert as false positive |
+| BL-002 | P1 | Deploy to Firebase App Hosting | 2026-05-24 | | Connect GitHub repo in Firebase Console; live URL unlocks BL-003. Deploy `firestore.rules` + indexes too (`firebase deploy --only firestore`) — the rules now deny all client access |
+| BL-031 | P1 | Post-deploy smoke test: Sonnet 5.5 + background runs | 2026-10-05 | | Never run against real Firebase Auth or the live Anthropic API. After BL-002: one panel per persona (tone, valid Synthesizer `tool_use`, title); start a debate and close the tab mid-run, reopen after a minute (should have progressed/finished); open the same panel in two tabs (one run only); /chat: quick reply, Debate, Debate this. All of this already passes against emulators + a fake model API — this is the real-services check |
+| BL-003 | P1 | Set up Stripe webhook endpoint in production | 2026-05-24 | | After live URL known: add the endpoint `/api/stripe/webhook` in Stripe with events `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`; set `stripe-webhook-secret` in Secret Manager. Test with `stripe trigger` (renewal, failed payment, cancel at period end) |
+| BL-035 | P1 | Decide the Pro run cap | 2026-10-30 | | Upgrade dialog promises "100 panel runs / month"; code gives Pro unlimited runs. Either enforce a cap or fix the copy (audit #5). Needs a pricing decision — see v2 spec §8, §13 |
+| BL-037 | P1 | Decide `cpuAlwaysAllocated` | 2026-10-31 | | On (current): debates finish while users are away; CPU billed for instance lifetime. Off: cheaper; unwatched debates pause and resume on return. v2 spec §13.5 |
+| BL-038 | P2 | Lint, CI, e2e harness, and paywall title | 2026-10-30 | | `npm run lint` fails (2 pre-existing errors). No CI — add lint + `npm test` + build on push. Commit the browser e2e harness (emulators + fake model API + Playwright, recipe in `.memory/RULES.md`) so it can run in CI. Paywall dialog always says "You've used your 5 free panel runs" even when opened from a locked Pro feature (audit #9) |
+| BL-040 | P2 | Launch basics | 2026-10-30 | | Privacy policy + terms pages, account deletion, panel deletion, dashboard access beyond the latest 20 panels, rate limiting |
+| BL-047 | P1 | Decide quick-reply limits and model | 2026-10-31 | | Free users get 30 quick replies/day — a placeholder (`lib/billing/replies.ts`). Also whether replies use Sonnet 5.5 (current) or a cheaper model. v2 spec §13.1–13.2 |
+| BL-048 | P2 | v2 M1 follow-ups | 2026-10-31 | | Not in M1: persona and rounds choice for debates started in chat (uses General, 2 rounds); Stop button for a running debate (spec §3.3); rolling summary for long conversations (spec §5 — replies currently see the last ~24k chars); conversation sharing (spec §13.4 — chat debates are private) |
+| BL-042 | P2 | v2 M2: coordinator auto-routing | 2026-10-31 | | `convene_panel` tool, free-tier consent card, override logging, metering changes (spec §4, §8) |
+| BL-043 | P2 | v2 M3: compare-options debate mode | 2026-10-31 | | Spec §7.3 |
+| BL-044 | P2 | v2 M4: migrate v1 panels, conversation-list dashboard, launch | 2026-10-31 | | Spec §10 |
+| BL-045 | P2 | v2 M5: MCP server (plugin distribution) | 2026-10-31 | | Async `start_debate` / `get_debate_result` tools; OAuth; links back to transcripts (spec §11) |
+| BL-029 | P3 | Deliberate upgrade: firebase-admin 13 → 14 (major) | 2026-09-14 | | Major upgrade — needs approval per repo rules. **Plan ready (2026-10-05):** trial-installed 14.5.0 locally — `tsc` and `next build` both pass, no code changes needed. Only open question: v14 requires **Node ≥22** — confirm the App Hosting runtime is Node 22+ before applying. See DEPENDENCY_ALERTS DA-004 |
 
 ---
 
@@ -34,3 +29,8 @@
 
 | ID | Title | Completed |
 |----|-------|-----------|
+| BL-046 | App rendered in the browser's default serif: fixed self-referential `--font-sans` (now Geist) | 2026-10-31 |
+| BL-041 | v2 M1: conversations at /chat (beta) — quick replies, Debate button, "Debate this", inline live debates; verified in a browser | 2026-10-31 |
+| BL-039 | Streaming UI: Streamdown (styled markdown — `prose` had been a no-op) + scroll that stops following when you scroll up | 2026-10-31 |
+| BL-036 | Stripe: renewals, failed payments, scheduled cancellations synced (order-proof); /account shows them | 2026-10-31 |
+| BL-034 | Persona picked after typing is now actually used | 2026-10-31 |

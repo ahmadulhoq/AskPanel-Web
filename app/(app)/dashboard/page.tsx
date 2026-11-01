@@ -1,12 +1,22 @@
 import Link from 'next/link'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
-import { PanelInput } from '@/components/panel/PanelInput'
+import { QuestionComposer } from '@/components/dashboard/QuestionComposer'
+import { PanelList } from '@/components/dashboard/PanelList'
+import { SignOutButton } from '@/components/auth/SignOutButton'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ConfidenceBadge } from '@/components/panel/ConfidenceBadge'
-import type { PanelDoc, ConfidenceLevel } from '@/types'
+import { PERSONA_MAP } from '@/lib/agents/personas'
+import type { PanelDoc } from '@/types'
+import type { PanelSummary } from '@/components/dashboard/PanelList'
 
 export const metadata = { title: 'Dashboard — AskPanel' }
+
+function formatResetDate(timestamp: { toMillis(): number } | null | undefined): string | null {
+  if (!timestamp) return null
+  const d = new Date(timestamp.toMillis())
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
 
 export default async function DashboardPage({
   searchParams,
@@ -20,8 +30,11 @@ export default async function DashboardPage({
   const db = adminDb()
   const userSnap = await db.collection('users').doc(user.uid).get()
   const userData = userSnap.data()
-  const tier = userData?.subscription?.tier ?? 'free'
+  const tier = (userData?.subscription?.tier ?? 'free') as 'free' | 'pro'
   const freeRunsUsed = userData?.freeRunsUsed ?? 0
+  const resetDate = formatResetDate(userData?.freeRunsResetAt)
+  const runsLeft = Math.max(0, 5 - freeRunsUsed)
+  const customPersona = userData?.customPersona ?? null
 
   const panelsSnap = await db
     .collection('panels')
@@ -30,7 +43,28 @@ export default async function DashboardPage({
     .limit(20)
     .get()
 
-  const panels = panelsSnap.docs.map(d => ({ id: d.id, ...(d.data() as PanelDoc) }))
+  // Serialise to plain objects — no Timestamps passed to client components.
+  const panels: PanelSummary[] = panelsSnap.docs.map(d => {
+    const data = d.data() as PanelDoc
+    const isCustom = data.persona === 'custom'
+    const personaLabel =
+      isCustom
+        ? (data.customPersona?.label ?? 'Custom')
+        : data.persona !== 'general'
+          ? (PERSONA_MAP[data.persona]?.label ?? data.persona)
+          : null
+    return {
+      id: d.id,
+      question: data.question,
+      title: data.title ?? null,
+      persona: data.persona,
+      personaLabel,
+      status: data.status,
+      isPublic: data.isPublic,
+      parentPanelId: data.parentPanelId ?? null,
+      confidence: data.confidence ?? null,
+    }
+  })
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
@@ -38,53 +72,38 @@ export default async function DashboardPage({
         <h1 className="text-xl font-bold">AskPanel</h1>
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
           {tier === 'free' ? (
-            <span>{5 - freeRunsUsed} free run{5 - freeRunsUsed !== 1 ? 's' : ''} remaining</span>
+            <span>
+              {runsLeft} free run{runsLeft !== 1 ? 's' : ''} left
+              {resetDate && <span className="ml-1 text-xs opacity-70">· resets {resetDate}</span>}
+            </span>
           ) : (
             <Badge variant="default">Pro</Badge>
           )}
+          <Link href="/chat">
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+              Chat <span className="ml-1 rounded bg-primary/10 px-1 py-0.5 text-[10px] font-semibold text-primary">BETA</span>
+            </Button>
+          </Link>
+          <Link href="/account">
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+              Account
+            </Button>
+          </Link>
+          <SignOutButton />
         </div>
       </div>
 
       {upgraded === '1' && (
         <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-950/30 dark:text-green-300">
-          You're now on Pro. Enjoy unlimited panel runs.
+          You&apos;re now on Pro. Enjoy unlimited panel runs.
         </div>
       )}
 
       <section className="mb-10">
-        <PanelInput />
+        <QuestionComposer tier={tier} initialCustomPersona={customPersona} />
       </section>
 
-      {panels.length > 0 && (
-        <section>
-          <h2 className="mb-4 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Recent panels
-          </h2>
-          <ul className="space-y-2">
-            {panels.map(panel => (
-              <li key={panel.id}>
-                <Link
-                  href={`/panel/${panel.id}`}
-                  className="flex items-start justify-between rounded-lg border p-3 hover:bg-muted/50 transition-colors"
-                >
-                  <p className="text-sm line-clamp-2 flex-1 mr-4">{panel.question}</p>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {panel.status === 'complete' && panel.confidence && (
-                      <ConfidenceBadge level={panel.confidence as ConfidenceLevel} />
-                    )}
-                    {panel.status === 'running' && (
-                      <Badge variant="secondary">Running</Badge>
-                    )}
-                    {panel.status === 'error' && (
-                      <Badge variant="destructive">Error</Badge>
-                    )}
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <PanelList panels={panels} />
     </main>
   )
 }

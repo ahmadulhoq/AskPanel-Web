@@ -5,18 +5,30 @@ import { usePanel } from '@/hooks/usePanel'
 import { AgentTurn } from './AgentTurn'
 import { SynthesisCard } from './SynthesisCard'
 import { FinalAnswer } from './FinalAnswer'
+import { FollowUpComposer } from './FollowUpComposer'
+import { RetryButton } from './RetryButton'
+import type { ConfidenceLevel } from '@/types'
 
 interface Props {
   panelId: string
+  persona?: string
+  isPublic?: boolean
+  // Inside a conversation the chat input replaces the follow-up box.
+  showFollowUp?: boolean
+  onComplete?: (finalAnswer: string, confidence: ConfidenceLevel) => void
 }
 
-export function PanelThread({ panelId }: Props) {
+export function PanelThread({ panelId, persona = 'general', isPublic = true, showFollowUp = true, onComplete }: Props) {
   const state = usePanel(panelId)
-  const bottomRef = useRef<HTMLDivElement>(null)
 
+  // Report completion once, even if the parent passes a new callback on every render.
+  const reported = useRef(false)
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [state.turns, state.syntheses, state.finalAnswer])
+    if (state.status === 'complete' && state.finalAnswer && state.confidence && !reported.current) {
+      reported.current = true
+      onComplete?.(state.finalAnswer, state.confidence)
+    }
+  }, [state.status, state.finalAnswer, state.confidence, onComplete])
 
   if (state.status === 'idle') {
     return <PanelSkeleton />
@@ -40,9 +52,22 @@ export function PanelThread({ panelId }: Props) {
           )}
           {state.turns
             .filter(t => t.round === round)
-            .map((turn, i) => (
-              <AgentTurn key={`${turn.agent}-${round}-${i}`} turn={turn} />
-            ))}
+            .map((turn, i) => {
+              // For the Critic, issuesFound comes from the same-round Synthesizer.
+              // It's null during a live run (synthesis hasn't fired yet) and
+              // appears once synthesis_result arrives, retroactively tagging
+              // the completed Critic turn.
+              const sameSynthesis = turn.agent === 'critic'
+                ? state.syntheses.find(s => s.round === round)
+                : undefined
+              return (
+                <AgentTurn
+                  key={`${turn.agent}-${round}-${i}`}
+                  turn={turn}
+                  issuesFound={sameSynthesis?.issuesFound}
+                />
+              )
+            })}
           {state.syntheses
             .filter(s => s.round === round)
             .map(s => (
@@ -52,16 +77,23 @@ export function PanelThread({ panelId }: Props) {
       ))}
 
       {state.status === 'complete' && state.finalAnswer && state.confidence && (
-        <FinalAnswer answer={state.finalAnswer} confidence={state.confidence} />
+        <>
+          <FinalAnswer answer={state.finalAnswer} confidence={state.confidence} panelId={panelId} />
+          {showFollowUp && (
+            <FollowUpComposer parentPanelId={panelId} parentPersona={persona} parentIsPublic={isPublic} />
+          )}
+        </>
       )}
 
       {state.status === 'error' && (
-        <div className="rounded-lg border border-destructive bg-destructive/10 p-4 text-sm text-destructive">
-          {state.errorMessage ?? 'An error occurred. Please try again.'}
+        <div className="rounded-lg border border-destructive bg-destructive/10 p-4 space-y-3">
+          <p className="text-sm text-destructive">
+            {state.errorMessage ?? 'An error occurred. Please try again.'}
+          </p>
+          <RetryButton panelId={panelId} />
         </div>
       )}
 
-      <div ref={bottomRef} />
     </div>
   )
 }

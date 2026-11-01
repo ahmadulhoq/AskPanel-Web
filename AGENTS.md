@@ -88,7 +88,7 @@ Read `.memory/RESUME.md` to restore session state.
 | update-conventions | When project coding conventions may have drifted from actual practice. | `.agents/workflows/update-conventions.md` |
 
 ## Next.js Notice
-This project runs Next.js 15 with breaking changes from older versions. Before writing any Next.js code, check `node_modules/next/dist/docs/` for current conventions. Key difference: middleware is in `proxy.ts` with export named `proxy` (not `middleware.ts`/`middleware`).
+This project runs Next.js 16 with breaking changes from older versions. Before writing any Next.js code, check `node_modules/next/dist/docs/` for current conventions. Key difference: middleware is in `proxy.ts` with export named `proxy` (not `middleware.ts`/`middleware`) — `proxy.ts` runs on the Node.js runtime, not edge.
 
 ## Memory
 Persistent project memory lives in `.memory/`. The `session-start` procedure reads all
