@@ -28,6 +28,7 @@
 | components-dashboard | 4 | Dashboard composition — panel history search/filter, composer wrapper | `symbols/components-dashboard.md` |
 | components-chat | 5 | v2 chat UI: composer, reply, debate block, conversation view | `symbols/components-chat.md` |
 | components-auth | 2 | Sign-in/sign-up form, sign-out button | `symbols/components-auth.md` |
+| lib-mcp | 4 | MCP server core (dual-era), tools, API tokens | `symbols/lib-mcp.md` |
 | components-ui | 9 | shadcn/ui primitives (Button, Dialog, Badge, Card, Input, Label, Separator, Toaster, Textarea) | `symbols/components-ui.md` |
 
 **Total: 26 modules, 88 source files (+5 test files).** 2026-10-31 additions: runner/runState, lib/billing (runs, replies, subscription), lib/panels (create, streamDiff), lib/conversations, lib/sse, components/chat, chat pages, conversation routes. Removed: `getFirebaseDb`, `replayRounds`, react-markdown.

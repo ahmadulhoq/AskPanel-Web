@@ -1,5 +1,11 @@
 # Agent Changelog: askpanel-web
 
+## 2026-11-01 — BL-045: MCP server, v2 M5 (PR #9)
+
+- `/api/mcp`: stateless, dual-era (2026-07-28 modern + 2025-xx legacy) MCP server with async `start_debate` / `get_debate_result`; personal API tokens on /account; docs/mcp.md. Checked the current spec (2026-07-28: no initialize, `server/discover`, `resultType`) before building.
+- Self-review: 10 findings fixed — notably MCP-started debates weren't resumed after a runner died, tokens survived disabled/revoked accounts, batches bypassed the rate limit and dropped entries past 20, token cap racy, a charged debate could go missing if its conversation write failed.
+- e2e: 21 runner scenarios, 49 browser checks; unit 63. OAuth for MCP → BL-052.
+
 ## 2026-11-01 — BL-044: conversations become the product, v2 M4 (PR #8)
 
 - Dashboard = composer + conversation list; v1 panels migrate on first visit (chains → one conversation; idempotent; late panels picked up); Pro context attachments in chat; "debates" wording; /chat redirects; v1 composer/list removed.

@@ -19,6 +19,7 @@
 | `lib/billing/` | Free-run accounting | `reserveRun()`, `refundRun()` |
 | `lib/limits/` | Per-account rate limits (abuse caps, Firestore fixed window) | `limitInTransaction()`, `limitResponse()` |
 | `lib/account/` | Account deletion | `deleteAccount()` |
+| `lib/mcp/` + `app/api/mcp` | MCP server for AI tools (Claude Code, Cursor) | `handleMessage()`, `askPanelServer()`, `verifyApiToken()` |
 | `lib/panels/` | Stored panel state → SSE events | `diffPanel()` |
 | `lib/auth.ts` | Session cookie helpers | `getSessionUser()`, `createSessionCookie()`, `verifySessionCookie()` |
 | `lib/utils.ts` | className merge helper | `cn()` |
@@ -103,6 +104,9 @@
 - Panel: trash icon on /panel/[id] → `DELETE /api/panels/[id]` → stop if running (refund rule) → delete panel + its chat message
 - Conversation: trash icon on /chat/[cid] → `DELETE /api/conversations/[cid]` → stop running debates → delete conversation (recursive) + its panels + late sweep
 - Account: /account → type DELETE → `DELETE /api/account` → cancel live Stripe subscription (abort on failure) → delete panels, conversations, rate-limit docs, user doc → delete Auth user → sweep → cookie cleared; the runner of any running debate aborts when its doc disappears
+
+### MCP (2026-11-01, BL-045)
+- /account → create token (shown once) → client sends `Authorization: Bearer ap_…` to `POST /api/mcp` → `verifyApiToken` (hash lookup + Auth account check) → rate limit per message → `handleMessage` → `start_debate` (new conversation + `createPanel`) / `get_debate_result` (resume + snapshot wait)
 
 ### Auth Flow
 - Login: Firebase Auth (Google OAuth / email) via `useAuth()` → ID token → `POST /api/auth/session` → verifies token, upserts user doc on first login, sets `__session` cookie (SACRED S006)
