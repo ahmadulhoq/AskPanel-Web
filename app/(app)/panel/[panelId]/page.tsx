@@ -4,7 +4,7 @@ import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
 import { PanelThread } from '@/components/panel/PanelThread'
 import { QuestionBubble } from '@/components/panel/QuestionBubble'
-import { ShareButton } from '@/components/panel/ShareButton'
+import { ShareDebateButton } from '@/components/panel/ShareDebateButton'
 import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton'
 import { ThreadScroller } from '@/components/panel/ThreadScroller'
 import { Button } from '@/components/ui/button'
@@ -35,8 +35,6 @@ export default async function PanelPage({ params }: Props) {
   const panel = snap.data() as PanelDoc
   if (panel.userId !== user.uid) redirect('/dashboard')
 
-  const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/p/${panelId}`
-
   return (
     <div className="flex h-dvh flex-col">
       <header className="z-10 border-b bg-background/80 backdrop-blur-sm">
@@ -47,7 +45,12 @@ export default async function PanelPage({ params }: Props) {
             </Button>
           </Link>
           <div className="flex items-center gap-1">
-            {panel.isPublic && <ShareButton url={shareUrl} />}
+            <ShareDebateButton
+              panelId={panelId}
+              initialIsPublic={!!panel.isPublic}
+              inConversation={!!panel.conversationId}
+              finished={panel.status === 'complete'}
+            />
             <ConfirmDeleteButton
               what="panel"
               endpoint={`/api/panels/${panelId}`}

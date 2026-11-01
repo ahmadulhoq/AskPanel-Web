@@ -24,8 +24,9 @@ export interface CreatePanelInput {
   messageId?: string
 }
 
-// Creates a debate panel and starts its run. Throws FreeLimitReachedError when a free user
-// is out of runs, RateLimitedError when debates are started too fast. Used by the panel
+// Creates a debate panel and starts its run. Throws RunLimitReachedError (Free… or Pro…)
+// when the user is out of debates for the month, RateLimitedError when debates are started
+// too fast. Used by the panel
 // composer and by conversations.
 export async function createPanel(input: CreatePanelInput): Promise<string> {
   const { uid, question } = input
@@ -59,7 +60,7 @@ export async function createPanel(input: CreatePanelInput): Promise<string> {
   const panelId = nanoid(12)
   await db.runTransaction(async (tx) => {
     const countDebate = await limitInTransaction(tx, 'debate', uid)
-    const { tier, counted, userData } = await reserveRun(tx, userRef, Date.now())
+    const { tier, userData } = await reserveRun(tx, userRef, Date.now())
     countDebate()
 
     // Free → max 2 rounds, Pro → max 3.
@@ -100,7 +101,7 @@ export async function createPanel(input: CreatePanelInput): Promise<string> {
       finalAnswer: null,
       confidence: null,
       errorMessage: null,
-      runCounted: counted,
+      runCounted: true,
     })
   })
 

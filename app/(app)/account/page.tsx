@@ -10,14 +10,13 @@ import { DeleteAccountButton } from '@/components/account/DeleteAccountButton'
 import { ApiTokens } from '@/components/account/ApiTokens'
 import { listApiTokens } from '@/lib/mcp/tokens'
 import { SiteFooter } from '@/components/SiteFooter'
+import { allowance, FREE_RUN_LIMIT, PRO_RUN_LIMIT } from '@/lib/billing/runs'
 
 export const metadata = { title: 'Account — AskPanel' }
 
-const FREE_RUN_LIMIT = 5
-
-function formatDate(timestamp: { toMillis(): number } | null | undefined): string | null {
-  if (!timestamp) return null
-  return new Date(timestamp.toMillis()).toLocaleDateString('en-US', {
+function formatDate(ms: number | null | undefined): string | null {
+  if (!ms) return null
+  return new Date(ms).toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
@@ -33,10 +32,9 @@ export default async function AccountPage() {
   const userData = userSnap.data()
 
   const tier = (userData?.subscription?.tier ?? 'free') as 'free' | 'pro'
-  const freeRunsUsed = userData?.freeRunsUsed ?? 0
-  const runsLeft = Math.max(0, FREE_RUN_LIMIT - freeRunsUsed)
-  const resetDate = formatDate(userData?.freeRunsResetAt)
-  const renewalDate = formatDate(userData?.subscription?.currentPeriodEnd)
+  const { limit, left: runsLeft, resetAt } = allowance(userData)
+  const resetDate = formatDate(resetAt)
+  const renewalDate = formatDate(userData?.subscription?.currentPeriodEnd?.toMillis())
   const hasStripeCustomer = Boolean(userData?.subscription?.stripeCustomerId)
   const cancelAtPeriodEnd = userData?.subscription?.cancelAtPeriodEnd === true
   const paymentFailed = userData?.subscription?.status === 'past_due'
@@ -60,28 +58,22 @@ export default async function AccountPage() {
           </div>
           <CardDescription>
             {tier === 'pro'
-              ? 'Unlimited debates, all personas, custom personas, and full context injection.'
-              : 'Limited to 5 debates per month. Upgrade for unlimited debates and Pro features.'}
+              ? `${PRO_RUN_LIMIT} debates a month, all personas, custom personas, and full context injection.`
+              : `Limited to ${FREE_RUN_LIMIT} debates per month. Upgrade for ${PRO_RUN_LIMIT} debates a month and Pro features.`}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {tier === 'free' ? (
-            <div className="rounded-lg border bg-muted/30 p-4 text-sm">
-              <p className="font-medium">{runsLeft} of {FREE_RUN_LIMIT} debates remaining this month</p>
-              {resetDate && (
-                <p className="mt-1 text-muted-foreground">Resets on {resetDate}</p>
-              )}
-            </div>
-          ) : (
-            <div className="rounded-lg border bg-muted/30 p-4 text-sm">
-              <p className="font-medium">Unlimited debates</p>
-              {renewalDate && (
-                <p className="mt-1 text-muted-foreground">
-                  {cancelAtPeriodEnd ? `Ends on ${renewalDate} — it won't renew` : `Renews on ${renewalDate}`}
-                </p>
-              )}
-            </div>
-          )}
+          <div className="rounded-lg border bg-muted/30 p-4 text-sm">
+            <p className="font-medium">{runsLeft} of {limit} debates remaining this month</p>
+            {resetDate && (
+              <p className="mt-1 text-muted-foreground">Resets on {resetDate}</p>
+            )}
+            {tier === 'pro' && renewalDate && (
+              <p className="mt-1 text-muted-foreground">
+                Pro {cancelAtPeriodEnd ? `ends on ${renewalDate} — it won't renew` : `renews on ${renewalDate}`}
+              </p>
+            )}
+          </div>
 
           {paymentFailed && (
             <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">

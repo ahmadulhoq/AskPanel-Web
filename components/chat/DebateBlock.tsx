@@ -7,6 +7,7 @@ import { ChevronDown, ChevronUp, Scale } from 'lucide-react'
 import { PanelThread } from '@/components/panel/PanelThread'
 import { ConfidenceBadge } from '@/components/panel/ConfidenceBadge'
 import { StopButton } from '@/components/panel/StopButton'
+import { ShareDebateButton } from '@/components/panel/ShareDebateButton'
 import { STOPPED_MESSAGE } from '@/lib/panels/constants'
 import type { ConfidenceLevel, MessageRouting, MessageView } from '@/types'
 
@@ -48,6 +49,7 @@ export function DebateBlock({ panelId, initial, messageId, routing, onAnswerInst
           {verdict && <ConfidenceBadge level={verdict.confidence} />}
         </div>
         <div className="flex items-center gap-2">
+          {verdict && <ShareDebateButton panelId={panelId} initialIsPublic={!!initial?.isPublic} inConversation look="chip" />}
           {!settled && (
             <StopButton
               panelId={panelId}

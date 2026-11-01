@@ -187,7 +187,7 @@ export interface MessageView {
   status: MessageStatus
   seq: number
   panelId: string | null
-  debate: { status: PanelStatus; finalAnswer: string | null; confidence: ConfidenceLevel | null; stopped?: boolean } | null
+  debate: { status: PanelStatus; finalAnswer: string | null; confidence: ConfidenceLevel | null; stopped?: boolean; isPublic?: boolean } | null
   routing: MessageRouting | null
   context: string | null
 }

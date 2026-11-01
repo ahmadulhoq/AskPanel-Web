@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
 import { DEFAULT_MODEL } from '@/lib/anthropic'
-import { reserveRun, FreeLimitReachedError } from '@/lib/billing/runs'
+import { reserveRun, FreeLimitReachedError, ProLimitReachedError, proLimitMessage } from '@/lib/billing/runs'
 import { runPanelJob } from '@/lib/agents/runner'
 import { emptyCompare } from '@/lib/agents/compareState'
 import { limitInTransaction, RateLimitedError, rateLimitedResponse } from '@/lib/limits/rateLimit'
@@ -37,7 +37,7 @@ export async function POST(
 
       const countDebate = await limitInTransaction(tx, 'debate', user.uid)
       // The failed run was refunded, so a retry counts as a new run.
-      const { counted } = await reserveRun(tx, userRef, Date.now())
+      await reserveRun(tx, userRef, Date.now())
       countDebate()
 
       // Start over from round 1.
@@ -52,7 +52,7 @@ export async function POST(
         run: null,
         stoppedAt: null,
         compare: data.mode === 'compare' ? emptyCompare() : null,
-        runCounted: counted,
+        runCounted: true,
         'config.model': DEFAULT_MODEL,
       })
     })
@@ -61,6 +61,7 @@ export async function POST(
       return NextResponse.json({ error: err.message }, { status: err.status })
     }
     if (err instanceof RateLimitedError) return rateLimitedResponse(err)
+    if (err instanceof ProLimitReachedError) return NextResponse.json({ error: proLimitMessage(err.resetAt) }, { status: 429 })
     if (err instanceof FreeLimitReachedError) {
       return NextResponse.json(
         { error: "You've used your free runs for this month. Upgrade to Pro to retry." },
