@@ -3,10 +3,10 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
 import { createPanel } from '@/lib/panels/create'
-import { FreeLimitReachedError } from '@/lib/billing/runs'
-import { RateLimitedError, rateLimitedResponse } from '@/lib/limits/rateLimit'
+import { panelErrorResponse } from '@/lib/panels/errors'
 import { debateContext } from '@/lib/conversations/context'
 import { sanitizeDebateSettings } from '@/lib/conversations/settings'
+import { logRouting } from '@/lib/conversations/routingLog'
 import {
   conversationRef, getOwnedConversation, loadMessages, messagesRef, nextSeq, toMessageView,
 } from '@/lib/conversations/store'
@@ -67,10 +67,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       messageId: assistantRef.id,
     })
   } catch (err) {
-    if (err instanceof FreeLimitReachedError) {
-      return NextResponse.json({ error: 'FREE_LIMIT_REACHED' }, { status: 402 })
-    }
-    if (err instanceof RateLimitedError) return rateLimitedResponse(err)
+    const refused = panelErrorResponse(err)
+    if (refused) return refused
     throw err
   }
 
@@ -81,6 +79,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   batch.set(assistantRef, { ...message, createdAt: FieldValue.serverTimestamp() })
   batch.update(conversationRef(cid), { updatedAt: FieldValue.serverTimestamp(), ...settingsUpdate })
   await batch.commit()
+  logRouting(user.uid, cid, history[replyIndex].id, 'debate_this', debateSettings.mode)
 
   return NextResponse.json({
     message: toMessageView(assistantRef.id, message, { status: 'queued', finalAnswer: null, confidence: null }),

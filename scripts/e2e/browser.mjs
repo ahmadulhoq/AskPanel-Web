@@ -49,6 +49,20 @@ async function seedPanels(uid) {
   }
 }
 
+const FIRESTORE = `http://${process.env.FIRESTORE_EMULATOR_HOST}/v1/projects/${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}/databases/(default)/documents`
+const OWNER = { authorization: 'Bearer owner', 'content-type': 'application/json' }
+async function makePro(uid) {
+  const res = await fetch(`${FIRESTORE}/users/${uid}?updateMask.fieldPaths=subscription.tier`, {
+    method: 'PATCH', headers: OWNER, body: JSON.stringify({ fields: { subscription: { mapValue: { fields: { tier: { stringValue: 'pro' } } } } } }),
+  })
+  if (!res.ok) throw new Error(`could not make the user Pro (${res.status})`)
+}
+async function routingEvents(uid) {
+  const res = await fetch(`${FIRESTORE}/routingEvents?pageSize=300`, { headers: OWNER })
+  const { documents = [] } = await res.json()
+  return documents.filter((d) => d.fields.uid.stringValue === uid).map((d) => d.fields.event.stringValue)
+}
+
 const { cookie, uid } = await sessionCookie()
 await seedPanels(uid)
 const results = []
@@ -58,7 +72,9 @@ const ctx = await browser.newContext({ viewport: { width: 1280, height: 650 } })
 await ctx.addCookies([{ name: '__session', value: cookie, url: BASE }])
 const page = await ctx.newPage()
 const errors = []
-page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
+// Set while a step provokes an error on purpose (e.g. an expected 409).
+let expectErrors = false
+page.on('console', (m) => { if (m.type() === 'error' && !expectErrors) errors.push(m.text()) })
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message))
 // The thread's scroll container (ThreadScroller) — the first scrolling, overflowing div.
 const onScroller = (action) => page.evaluate((action) => {
@@ -199,6 +215,58 @@ try {
   await page.goto(compareUrl.replace('/panel/', '/p/'))
   check('a shared compare panel shows the options and the winner',
     await page.getByText('Option 2 wins').isVisible() && await page.getByText(/^Option [123]$/).count() === 3)
+
+  // ── Coordinator: the assistant decides when to convene the panel ─────
+  await fake('/__control', { tokenDelayMs: 10 })
+  await page.goto(convoUrl)
+  await page.locator('textarea').fill('Should we hire a CFO now?')
+  await page.keyboard.press('Enter')
+  await page.getByText('This looks worth debating').waitFor({ timeout: 15000 })
+  check('free tier: a debatable message gets a proposal, not a debate', await page.getByText('Panel deliberating…').count() === 0)
+  await page.waitForTimeout(1000)
+  const card = await page.getByRole('button', { name: 'Run the panel' }).boundingBox()
+  check('the proposal scrolls into view', card && card.y > 0 && card.y + card.height < 520, JSON.stringify(card))
+  await page.screenshot({ path: `${SHOTS}/12-proposal.png` })
+  const repliesBefore = await page.locator('h2', { hasText: 'reply view' }).count()
+  await page.getByRole('button', { name: 'Just answer' }).click()
+  await page.locator('h2', { hasText: 'reply view' }).nth(repliesBefore).waitFor({ timeout: 15000 })
+  check('"Just answer" turns the proposal into a direct reply', await page.getByText('This looks worth debating').count() === 0)
+
+  await page.locator('textarea').fill('Should we raise prices or keep them?')
+  await page.keyboard.press('Enter')
+  await page.getByText('Compare options', { exact: true }).waitFor({ timeout: 15000 })
+  await page.getByRole('button', { name: 'Run the panel' }).click()
+  await page.getByText(/^Convening the panel/).waitFor({ timeout: 15000 })
+  const verdictsBefore = await page.getByText('Panel verdict').count()
+  await page.getByText('Panel verdict').nth(verdictsBefore).waitFor({ timeout: 60000 })
+  check('"Run the panel" runs the proposed debate (compare mode, as the assistant chose)', await page.getByText('Option 2 wins').count() >= 1)
+
+  await makePro(uid)
+  await fake('/__control', { tokenDelayMs: 150 })
+  await page.reload()
+  await page.locator('textarea').fill('Should we open an office in Berlin?')
+  await page.keyboard.press('Enter')
+  await page.getByText('Panel deliberating…').waitFor({ timeout: 15000 })
+  check('Pro: the assistant starts the debate itself and says why',
+    await page.getByText(/^Convening the panel/).count() === 1 && await page.getByText(/^The assistant convened the panel/).count() === 1)
+  // Two "Just answer" requests at once (double click, two tabs): one answers, one is refused.
+  const mid = await page.locator('[data-message-id]').last().getAttribute('data-message-id')
+  expectErrors = true
+  const statuses = await page.evaluate(async ([path]) => {
+    const post = () => fetch(path, { method: 'POST' }).then(async (r) => { await r.text(); return r.status })
+    return (await Promise.all([post(), post()])).sort()
+  }, [`${new URL(convoUrl).pathname.replace('/chat/', '/api/conversations/')}/messages/${mid}/answer`])
+  await page.waitForTimeout(300)
+  expectErrors = false
+  check('two simultaneous "Just answer" requests produce one answer', JSON.stringify(statuses) === '[200,409]', JSON.stringify(statuses))
+  const repliesNow = await page.locator('h2', { hasText: 'reply view' }).count()
+  await page.reload()
+  await page.locator('h2', { hasText: 'reply view' }).nth(repliesNow).waitFor({ timeout: 15000 })
+  check('"Just answer" on a running debate stops it and answers directly', await page.getByText('Panel deliberating…').count() === 0)
+  await fake('/__control', { tokenDelayMs: 10 })
+  const events = await routingEvents(uid)
+  const expected = ['answer', 'propose', 'just_answer', 'run_proposal', 'debate', 'debate_this', 'debate_button']
+  check('routing decisions and overrides are logged', expected.every((e) => events.includes(e)), JSON.stringify(events))
 
   // ── Launch basics: legal pages, paging, deletion ─────────────────────
   await page.goto(BASE + '/')

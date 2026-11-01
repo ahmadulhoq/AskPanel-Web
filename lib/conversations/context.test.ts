@@ -136,3 +136,10 @@ test('debate context leads with the rolling summary, capped at half the budget',
   assert.match(debateContext([], 400, 'short summary')!, /Summary: short summary/)
 })
 
+test('an open debate proposal is described to the model, not dropped', () => {
+  const proposal: ContextMessage = { role: 'assistant', kind: 'debate_proposal', content: '', status: 'complete', debate: null }
+  const msgs = toModelMessages([user('Should we hire a CFO?'), proposal, user('Actually, what does a CFO cost?')])
+  assert.equal(msgs.length, 3)
+  assert.match(msgs[1].content, /not run it/)
+})
+

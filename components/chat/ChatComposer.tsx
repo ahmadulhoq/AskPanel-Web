@@ -107,8 +107,8 @@ export function ChatComposer({ onSubmit, disabled = false, placeholder, autoFocu
         </div>
       </div>
       <p className="mt-2 hidden px-2 text-xs text-muted-foreground sm:block">
-        <kbd className="font-sans font-medium text-foreground/70">Enter</kbd> for a quick answer ·{' '}
-        <span className="font-medium text-foreground/70">Debate</span> runs the panel on your message
+        <kbd className="font-sans font-medium text-foreground/70">Enter</kbd> to send — the assistant brings in the panel when it&apos;s worth it ·{' '}
+        <span className="font-medium text-foreground/70">Debate</span> always runs it
       </p>
     </div>
   )

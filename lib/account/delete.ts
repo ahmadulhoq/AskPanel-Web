@@ -32,13 +32,14 @@ export async function deleteAccount(uid: string): Promise<void> {
 
 async function deleteUserData(uid: string) {
   const db = adminDb()
-  const [panels, conversations, limits] = await Promise.all([
+  const [panels, conversations, limits, routing] = await Promise.all([
     db.collection('panels').where('userId', '==', uid).select().get(),
     db.collection('conversations').where('userId', '==', uid).select().get(),
     db.collection('rateLimits').where('uid', '==', uid).select().get(),
+    db.collection('routingEvents').where('uid', '==', uid).select().get(),
   ])
   const writer = db.bulkWriter()
-  for (const doc of [...panels.docs, ...limits.docs]) writer.delete(doc.ref)
+  for (const doc of [...panels.docs, ...limits.docs, ...routing.docs]) writer.delete(doc.ref)
   await Promise.all(conversations.docs.map((doc) => db.recursiveDelete(doc.ref, writer)))
   await writer.close()
 }

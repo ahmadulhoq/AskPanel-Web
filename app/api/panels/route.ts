@@ -1,9 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getSessionUser } from '@/lib/auth'
 import { createPanel } from '@/lib/panels/create'
+import { panelErrorResponse } from '@/lib/panels/errors'
 import { listPanels } from '@/lib/panels/list'
-import { FreeLimitReachedError } from '@/lib/billing/runs'
-import { RateLimitedError, rateLimitedResponse } from '@/lib/limits/rateLimit'
 
 // GET /api/panels?cursor=<next from the previous page> — the next page of the user's panels
 // (dashboard "Show more"). Malformed cursors return an empty page.
@@ -41,10 +40,8 @@ export async function POST(request: NextRequest) {
     })
     return NextResponse.json({ panelId })
   } catch (err) {
-    if (err instanceof FreeLimitReachedError) {
-      return NextResponse.json({ error: 'FREE_LIMIT_REACHED' }, { status: 402 })
-    }
-    if (err instanceof RateLimitedError) return rateLimitedResponse(err)
+    const refused = panelErrorResponse(err)
+    if (refused) return refused
     throw err
   }
 }

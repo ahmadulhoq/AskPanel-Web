@@ -78,7 +78,7 @@ await scenario('1. happy path: run completes, viewer gets the full event sequenc
   assert.ok(completed.startsWith(tokens.map((t) => t.token).join('')), 'streamed deltas are a prefix of the final text')
   console.log('   respondent live updates:', tokens.length)
   assert.equal(count(w.events, 'agent_start', 'respondent'), 1); assert.equal(count(w.events, 'agent_start', 'critic'), 1)
-  assert.deepEqual(await fake('/__stats'), { respondent: 1, critic: 1, synthesizer: 1, title: 1, reply: 0, summary: 0, proposer: 0, judge: 0 })
+  assert.deepEqual(await fake('/__stats'), { respondent: 1, critic: 1, synthesizer: 1, title: 1, reply: 0, summary: 0, proposer: 0, judge: 0, convene: 0 })
   assert.equal((await user('u1')).freeRunsUsed, 1, 'successful run is not refunded')
 })
 

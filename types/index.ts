@@ -140,7 +140,15 @@ export interface DebateSettings {
   mode: PanelMode
 }
 
-export type MessageKind = 'text' | 'debate'
+// 'debate_proposal': the assistant suggested a debate (free tier) — Run it or Just answer.
+export type MessageKind = 'text' | 'debate' | 'debate_proposal'
+
+// Why the assistant routed a message to the panel (set when the coordinator decided).
+export interface MessageRouting {
+  mode: PanelMode
+  question: string
+  reason: string
+}
 export type MessageStatus = 'streaming' | 'complete' | 'error'
 
 export interface MessageDoc {
@@ -153,6 +161,7 @@ export interface MessageDoc {
   // Ordering key (ms); assistant replies get user seq + 1.
   seq: number
   createdAt: Timestamp
+  routing?: MessageRouting | null
 }
 
 // What the chat UI receives for each message (no Timestamps across the RSC boundary).
@@ -165,12 +174,15 @@ export interface MessageView {
   seq: number
   panelId: string | null
   debate: { status: PanelStatus; finalAnswer: string | null; confidence: ConfidenceLevel | null; stopped?: boolean } | null
+  routing: MessageRouting | null
 }
 
 // Events streamed by POST /api/conversations/[cid]/messages for a quick reply.
 export type ReplyStreamEvent =
-  | { type: 'start'; userMessage: MessageView; assistantMessage: MessageView }
+  | { type: 'start'; userMessage: MessageView | null; assistantMessage: MessageView }
   | { type: 'token'; text: string }
+  // The assistant sent the message to the panel instead: a debate, or a proposal to run one.
+  | { type: 'routed'; message: MessageView }
   | { type: 'done' }
   | { type: 'error'; message: string }
 

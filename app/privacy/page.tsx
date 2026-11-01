@@ -41,6 +41,11 @@ export default function PrivacyPage() {
             only for the short window each limit applies to.
           </li>
           <li>
+            <strong>Routing events:</strong> when the assistant answers a message directly or
+            sends it to the panel, and when you override that choice — without the text of the
+            message — so we can tell how well it decides.
+          </li>
+          <li>
             <strong>Server logs:</strong> errors and events with your account ID, kept by our
             hosting provider for a limited time to keep the service running.
           </li>

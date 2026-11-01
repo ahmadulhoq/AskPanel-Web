@@ -26,12 +26,16 @@ export function toMessageView(id: string, m: NewMessage, debate: MessageView['de
     seq: m.seq,
     panelId: m.panelId,
     debate,
+    routing: m.routing ?? null,
   }
 }
 
-// The latest `limit` messages, oldest first, with each debate's current status and verdict.
-export async function loadMessages(cid: string, limit = 200): Promise<MessageView[]> {
-  const snap = await messagesRef(cid).orderBy('seq', 'desc').limit(limit).get()
+// The latest `limit` messages (before `beforeSeq`, if given), oldest first, with each
+// debate's current status and verdict.
+export async function loadMessages(cid: string, limit = 200, beforeSeq?: number): Promise<MessageView[]> {
+  let query = messagesRef(cid).orderBy('seq', 'desc')
+  if (beforeSeq !== undefined) query = query.where('seq', '<', beforeSeq)
+  const snap = await query.limit(limit).get()
   const docs = snap.docs.reverse().map((d) => ({ id: d.id, data: d.data() as MessageDoc }))
 
   const panelIds = docs.map((d) => d.data.panelId).filter((id): id is string => !!id)
@@ -53,3 +57,10 @@ export async function loadMessages(cid: string, limit = 200): Promise<MessageVie
 
 // Next ordering key: wall-clock ms, but always after the last message.
 export const nextSeq = (history: MessageView[]) => Math.max(Date.now(), (history.at(-1)?.seq ?? 0) + 1)
+
+// One message, read directly.
+export async function getMessage(cid: string, mid: string): Promise<(NewMessage & { id: string }) | null> {
+  const snap = await messagesRef(cid).doc(mid).get()
+  return snap.exists ? { id: snap.id, ...(snap.data() as NewMessage) } : null
+}
+
