@@ -3,6 +3,9 @@ import type { MessageView } from '@/types'
 export type ContextMessage = Pick<MessageView, 'role' | 'kind' | 'content' | 'status' | 'debate'> & { context?: string | null }
 
 const attached = (m: ContextMessage) => (m.role === 'user' && m.context?.trim() ? `\n\n[Context the user attached]\n${m.context.trim()}` : '')
+const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, Math.max(0, max - 1))}…` : text)
+// In a debate brief an earlier attachment is only background: keep it short.
+const BRIEF_ATTACHMENT_CHARS = 600
 export type SeqMessage = ContextMessage & Pick<MessageView, 'seq'>
 
 interface ModelMessage {
@@ -121,7 +124,11 @@ export function transcriptLine(m: ContextMessage): string | null {
       ? `Panel verdict (confidence: ${m.debate.confidence ?? 'unknown'}): ${m.debate.finalAnswer}`
       : null
   }
-  if (m.role === 'user') return m.content.trim() ? `User: ${m.content.trim()}${attached(m)}` : null
+  if (m.role === 'user') {
+    if (!m.content.trim()) return null
+    const ctx = m.context?.trim() ? ` (attached: ${clip(m.context.trim(), BRIEF_ATTACHMENT_CHARS)})` : ''
+    return `User: ${m.content.trim()}${ctx}`
+  }
   return m.status === 'complete' && m.content.trim() ? `Assistant: ${m.content.trim()}` : null
 }
 
@@ -142,11 +149,32 @@ export function debateContext(
   const lines: string[] = []
   let used = header.length + intro.length
   for (let i = history.length - 1; i >= 0; i--) {
-    const line = transcriptLine(history[i])
+    let line = transcriptLine(history[i])
     if (!line) continue
-    if (used + line.length + 1 > maxChars) break
+    if (used + line.length + 1 > maxChars) {
+      // The newest line alone is too long: keep the start of it rather than nothing.
+      if (lines.length > 0 || maxChars - used < 80) break
+      line = clip(line, maxChars - used - 1)
+    }
     lines.unshift(line)
     used += line.length + 1
   }
   return lines.length || intro ? header + intro + lines.join('\n') : null
+}
+
+// What a debate gets as background (createPanel's `userContext`, at most `total` chars):
+// context attached to the debated message, then the conversation so far. The attachment
+// gets most of the room but leaves some for the conversation when there is one.
+export function debateBrief(
+  attachment: string | null | undefined,
+  history: ContextMessage[],
+  summary: string | null = null,
+  total = 4_000,
+): string | null {
+  const hasHistory = history.some((m) => transcriptLine(m)) || !!summary?.trim()
+  const att = attachment?.trim() ? clip(attachment.trim(), hasHistory ? Math.floor(total * 0.6) : total - 40) : null
+  const head = att ? `Context the user attached:\n${att}` : null
+  const room = Math.min(DEBATE_BUDGET_CHARS, total - (head ? head.length + 2 : 0))
+  const brief = room > 200 ? debateContext(history, room, summary) : null
+  return [head, brief].filter(Boolean).join('\n\n') || null
 }

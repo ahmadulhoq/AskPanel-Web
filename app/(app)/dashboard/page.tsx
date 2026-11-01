@@ -37,7 +37,8 @@ export default async function DashboardPage({
 
   // Panels not in a conversation yet (v1 panels, or ones started outside chat) are put into
   // conversations first, so the list shows everything. Cheap once done.
-  await migrateUserPanels(user.uid).catch((err) => console.error('[dashboard] migration failed', user.uid, err))
+  await migrateUserPanels(user.uid, Boolean(userData?.v1MigratedAt))
+    .catch((err) => console.error('[dashboard] migration failed', user.uid, err))
   const { conversations, next } = await listConversations(user.uid)
 
   return (

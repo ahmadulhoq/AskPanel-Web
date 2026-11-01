@@ -374,8 +374,11 @@ await scenario('20. v1 migration: chains become conversations, idempotently; lat
   })
   await makeUser('u20', 'free', 0)
   await v1('m-a', null, 1000); await v1('m-b', 'm-a', 2000); await v1('m-c', null, 3000)
-  assert.equal(await migrateUserPanels('u20'), 3)
-  assert.equal(await migrateUserPanels('u20'), 0, 'second run has nothing to do')
+  const flag = async () => Boolean((await user('u20')).v1MigratedAt)
+  // Two dashboard loads at once: both may migrate, the result is the same.
+  await Promise.all([migrateUserPanels('u20', await flag()), migrateUserPanels('u20', await flag())])
+  assert.equal(await flag(), true)
+  assert.equal(await migrateUserPanels('u20', true), 0, 'nothing left to do')
   const { conversations } = await listConversations('u20')
   assert.deepEqual(conversations.map((c) => [c.id, c.debateCount]).sort(), [['v1-m-a', 2], ['v1-m-c', 1]])
   const messages = (await db.collection('conversations').doc('v1-m-a').collection('messages').orderBy('seq').get()).docs.map((d) => d.data())
@@ -383,7 +386,7 @@ await scenario('20. v1 migration: chains become conversations, idempotently; lat
   assert.equal((await panel('m-b')).conversationId, 'v1-m-a')
   // A follow-up created later outside a conversation (conversationId: null) joins its parent's.
   await v1('m-d', 'm-b', 4000); await db.collection('panels').doc('m-d').update({ conversationId: null })
-  assert.equal(await migrateUserPanels('u20'), 1)
+  assert.equal(await migrateUserPanels('u20', true), 1)
   assert.equal((await panel('m-d')).conversationId, 'v1-m-a')
   assert.equal((await db.collection('conversations').doc('v1-m-a').get()).data().debateCount, 3)
 })

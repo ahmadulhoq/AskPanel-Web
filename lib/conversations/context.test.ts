@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { toModelMessages, debateContext, summaryBacklog, replyHistory, REPLY_WINDOW_MESSAGES, type ContextMessage } from './context.ts'
+import { toModelMessages, debateContext, debateBrief, summaryBacklog, replyHistory, REPLY_WINDOW_MESSAGES, type ContextMessage } from './context.ts'
 
 const user = (content: string): ContextMessage => ({ role: 'user', kind: 'text', content, status: 'complete', debate: null })
 const reply = (content: string, status: ContextMessage['status'] = 'complete'): ContextMessage =>
@@ -146,6 +146,26 @@ test('an open debate proposal is described to the model, not dropped', () => {
 test('context the user attached travels with their message', () => {
   const withContext: ContextMessage = { ...user('Review my pitch'), context: 'Deck: 12 slides, seed round.' }
   assert.match(toModelMessages([withContext])[0].content, /Review my pitch\n\n\[Context the user attached\]\nDeck: 12 slides/)
-  assert.match(debateContext([withContext])!, /User: Review my pitch[\s\S]*Deck: 12 slides/)
+  assert.match(debateContext([withContext])!, /User: Review my pitch \(attached: Deck: 12 slides/)
+})
+
+test('a big attachment in the history is shortened in a brief, never wipes it out', () => {
+  const big: ContextMessage = { ...user('Check this contract'), context: 'x'.repeat(3_800) }
+  const brief = debateContext([user('Earlier question'), reply('Earlier answer'), big])!
+  assert.match(brief, /User: Check this contract \(attached: x+…\)/)
+  assert.match(brief, /Earlier answer/)
+  const alone = debateContext([{ ...user('y'.repeat(5_000)) }], 1_000)!
+  assert.ok(alone.length <= 1_000 && /User: y+…/.test(alone), 'an over-long newest line is clipped, not dropped')
+})
+
+test('debateBrief: the attachment leads, and leaves room for the conversation', () => {
+  const history = [user('We sell B2B software'), reply('Noted.')]
+  const brief = debateBrief('z'.repeat(4_000), history)!
+  assert.ok(brief.length <= 4_000, `length ${brief.length}`)
+  assert.match(brief, /^Context the user attached:\nz+…/)
+  assert.match(brief, /We sell B2B software/)
+  const onlyAttachment = debateBrief('short doc', [])!
+  assert.equal(onlyAttachment, 'Context the user attached:\nshort doc')
+  assert.equal(debateBrief(null, []), null)
 })
 

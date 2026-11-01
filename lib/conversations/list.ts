@@ -35,7 +35,7 @@ export async function listConversations(uid: string, cursor?: string): Promise<C
   return {
     conversations: docs.map((d) => {
       const c = d.data() as ConversationDoc
-      return { id: d.id, title: c.title, updatedAt: c.updatedAt?.toMillis() ?? 0, debateCount: c.debateCount ?? 0 }
+      return { id: d.id, title: c.title, updatedAt: c.updatedAt?.toMillis() ?? 0, debateCount: Math.max(0, c.debateCount ?? 0) }
     }),
     next: snap.docs.length > CONVERSATION_PAGE_SIZE && last && lastAt ? encodeCursor(lastAt, last.id) : null,
   }

@@ -65,3 +65,16 @@ export async function getMessage(cid: string, mid: string): Promise<(NewMessage 
   return snap.exists ? { id: snap.id, ...(snap.data() as NewMessage) } : null
 }
 
+// Sets a conversation's debateCount from its messages (an aggregation query). Used after
+// any change to its debates instead of increments, so concurrent changes, retries and
+// older conversations all end up with the right number. Best effort.
+export async function recountDebates(cid: string): Promise<void> {
+  try {
+    const n = (await messagesRef(cid).where('kind', '==', 'debate').count().get()).data().count
+    await conversationRef(cid).update({ debateCount: n })
+  } catch (err) {
+    if ((err as { code?: number }).code === 5) return // NOT_FOUND: the conversation is gone
+    console.error('[conversations] could not recount debates', cid, err)
+  }
+}
+
