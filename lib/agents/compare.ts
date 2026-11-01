@@ -1,6 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore'
-import { getAnthropicClient, DEFAULT_MODEL } from '@/lib/anthropic'
-import { leasedUpdate, LeaseLostError, streamAgent } from './orchestrator'
+import { DEFAULT_MODEL } from '@/lib/anthropic'
+import { leasedUpdate, LeaseLostError, requestToolCall, streamAgent } from './orchestrator'
 import { buildCompareCriticPrompt, buildJudgePrompt, buildProposerPrompt, JUDGE_TOOL } from './comparePrompts'
 import { compareResumePoint, emptyCompare, parseJudgement, PROPOSER_COUNT } from './compareState'
 import type { AgentPrompt } from './prompts'
@@ -25,9 +25,6 @@ async function* streamTurn(
   }
   return full
 }
-
-// The Judge writes a full recommendation plus a score per option.
-const JUDGE_MAX_TOKENS = 3000
 
 // Compare-options run (spec §7.3): Proposers → Critic → Judge, one round, resumable after
 // the last stored step. Writes go through the same lease check as critique runs; the
@@ -66,18 +63,10 @@ export async function* runCompare(input: OrchestratorInput): SSEGenerator {
     // ── Judge (tool_use, like the Synthesizer) ───────────────────────
     yield { type: 'synthesis_start', round: 1 } satisfies SSEEvent
     const prompt = buildJudgePrompt(question, proposals, critique, context)
-    const response = await getAnthropicClient().messages.create({
-      model,
-      max_tokens: JUDGE_MAX_TOKENS,
-      system: [{ type: 'text', text: prompt.system, cache_control: { type: 'ephemeral' } }],
-      tools: JUDGE_TOOL,
-      tool_choice: { type: 'tool', name: 'judge_options' },
-      messages: [{ role: 'user', content: prompt.user }],
-    }, { signal })
-    const toolUse = response.content.find((b) => b.type === 'tool_use')
-    const verdict = parseJudgement(toolUse?.type === 'tool_use' ? toolUse.input : null, proposals.length)
+    const { input: toolInput, stopReason } = await requestToolCall(prompt, model, JUDGE_TOOL, signal)
+    const verdict = parseJudgement(toolInput, proposals.length)
     if (!verdict) {
-      throw new Error(response.stop_reason === 'max_tokens'
+      throw new Error(stopReason === 'max_tokens'
         ? "The judge's verdict was cut off"
         : 'The judge did not return a usable verdict')
     }

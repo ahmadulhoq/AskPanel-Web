@@ -56,7 +56,7 @@ export function buildSynthesizerPrompt(
 ): AgentPrompt {
   const SYNTHESIZER_SYSTEM = `You are the Synthesizer in a multi-agent deliberation panel. You evaluate the discussion and determine whether a confident answer has been reached.
 
-Use the evaluate_debate tool to record your judgment:
+Always respond by calling the evaluate_debate tool — never with plain text. Record your judgment in it:
 - Return "consensus" if the answer is solid and the Critic raised no major unresolved objections — even on round 1. Most good questions should reach consensus quickly.
 - Return "continue" only if the Critic identified a substantive issue that genuinely changes the answer and another round would likely resolve it.
 - Return "contested" if there is a fundamental disagreement that more rounds cannot resolve.
@@ -106,6 +106,9 @@ export const SYNTHESIZER_TOOL: Anthropic.Tool[] = [
         },
       },
       required: ['decision', 'confidence', 'reasoning', 'issuesFound', 'finalAnswer'],
+      additionalProperties: false,
     },
+    // Strict: the input always matches the schema (tool_choice is "auto" — see orchestrator).
+    strict: true,
   },
 ]

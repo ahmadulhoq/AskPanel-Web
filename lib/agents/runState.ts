@@ -1,5 +1,35 @@
-import type { PanelRound } from '@/types'
+import type { ConfidenceLevel, PanelRound, SynthesisDecision } from '@/types'
 import type { ConversationTurn } from './types'
+
+export type Synthesis = {
+  decision: SynthesisDecision
+  confidence: ConfidenceLevel
+  reasoning: string
+  issuesFound: number
+  finalAnswer: string
+}
+
+const DECISIONS: SynthesisDecision[] = ['consensus', 'continue', 'contested']
+const CONFIDENCE: ConfidenceLevel[] = ['high', 'medium', 'low', 'contested']
+
+// The Synthesizer's tool input, checked and normalised: a known decision and a non-empty
+// final answer are required; confidence falls back to medium, issuesFound to 0. Returns
+// null if unusable (e.g. a tool call cut off mid-input).
+export function parseSynthesis(input: unknown): Synthesis | null {
+  if (!input || typeof input !== 'object') return null
+  const o = input as Record<string, unknown>
+  if (!DECISIONS.includes(o.decision as SynthesisDecision)) return null
+  const finalAnswer = typeof o.finalAnswer === 'string' ? o.finalAnswer.trim() : ''
+  if (!finalAnswer) return null
+  const issues = Math.trunc(Number(o.issuesFound))
+  return {
+    decision: o.decision as SynthesisDecision,
+    confidence: CONFIDENCE.includes(o.confidence as ConfidenceLevel) ? (o.confidence as ConfidenceLevel) : 'medium',
+    reasoning: typeof o.reasoning === 'string' ? o.reasoning.trim() : '',
+    issuesFound: Number.isFinite(issues) && issues > 0 ? issues : 0,
+    finalAnswer,
+  }
+}
 
 export type RunStep = 'respondent' | 'critic' | 'synthesizer'
 
