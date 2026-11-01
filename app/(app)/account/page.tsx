@@ -40,7 +40,7 @@ export default async function AccountPage() {
   const paymentFailed = userData?.subscription?.status === 'past_due'
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
+    <main className="mx-auto w-full max-w-2xl px-4 py-10">
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-xl font-bold">Account</h1>
         <Link href="/dashboard">
@@ -107,7 +107,7 @@ export default async function AccountPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <DeleteAccountButton hasSubscription={Boolean(userData?.subscription?.stripeSubscriptionId)} />
+          <DeleteAccountButton hasSubscription={tier === 'pro'} />
         </CardContent>
       </Card>
       <div className="mt-10">

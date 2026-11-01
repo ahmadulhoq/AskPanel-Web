@@ -35,7 +35,7 @@ export default async function ChatListPage() {
   })
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
+    <main className="mx-auto w-full max-w-2xl px-4 py-10">
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-xl font-bold">
           Chat <span className="ml-1 rounded bg-primary/10 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-primary">BETA</span>

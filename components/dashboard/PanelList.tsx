@@ -18,26 +18,33 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
 
 interface Props {
   initialPanels: PanelSummary[]
-  initialHasMore: boolean
+  // Cursor for the page after the first (null if everything fits on it).
+  initialNext: string | null
 }
 
-export function PanelList({ initialPanels, initialHasMore }: Props) {
-  const [panels, setPanels] = useState(initialPanels)
-  const [hasMore, setHasMore] = useState(initialHasMore)
+export function PanelList({ initialPanels, initialNext }: Props) {
+  // Later pages are kept separately, so a server refresh of the first page still shows.
+  const [older, setOlder] = useState<{ panels: PanelSummary[]; next: string | null } | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
   const [loadError, setLoadError] = useState('')
 
+  const panels = useMemo(() => {
+    if (!older) return initialPanels
+    const seen = new Set(initialPanels.map((p) => p.id))
+    return [...initialPanels, ...older.panels.filter((p) => !seen.has(p.id))]
+  }, [initialPanels, older])
+  const next = older ? older.next : initialNext
+  const hasMore = next !== null
+
   async function loadMore() {
-    const last = panels.at(-1)
-    if (!last) return
+    if (!next) return
     setLoadingMore(true)
     setLoadError('')
     try {
-      const res = await fetch(`/api/panels?after=${encodeURIComponent(last.id)}`)
+      const res = await fetch(`/api/panels?cursor=${encodeURIComponent(next)}`)
       if (!res.ok) throw new Error()
-      const page = (await res.json()) as { panels: PanelSummary[]; hasMore: boolean }
-      setPanels((all) => [...all, ...page.panels.filter((p) => !all.some((a) => a.id === p.id))])
-      setHasMore(page.hasMore)
+      const page = (await res.json()) as { panels: PanelSummary[]; next: string | null }
+      setOlder((prev) => ({ panels: [...(prev?.panels ?? []), ...page.panels], next: page.next }))
     } catch {
       setLoadError('Could not load more panels.')
     } finally {

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
-import { rateLimit, RateLimitedError, rateLimitedResponse } from '@/lib/limits/rateLimit'
+import { limitResponse } from '@/lib/limits/rateLimit'
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024 // 5 MB
 const MAX_CONTEXT_CHARS = 4000
@@ -18,12 +18,8 @@ export async function POST(request: NextRequest) {
   if (tier !== 'pro') {
     return NextResponse.json({ error: 'Pro subscription required' }, { status: 403 })
   }
-  try {
-    await rateLimit('context', { uid: user.uid })
-  } catch (err) {
-    if (err instanceof RateLimitedError) return rateLimitedResponse(err)
-    throw err
-  }
+  const limited = await limitResponse('context', user.uid)
+  if (limited) return limited
 
   let formData: FormData
   try {

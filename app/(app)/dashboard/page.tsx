@@ -34,10 +34,10 @@ export default async function DashboardPage({
   const runsLeft = Math.max(0, 5 - freeRunsUsed)
   const customPersona = userData?.customPersona ?? null
 
-  const { panels, hasMore } = await listPanels(user.uid)
+  const { panels, next } = await listPanels(user.uid)
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
+    <main className="mx-auto w-full max-w-2xl px-4 py-10">
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-xl font-bold">AskPanel</h1>
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
@@ -73,7 +73,7 @@ export default async function DashboardPage({
         <QuestionComposer tier={tier} initialCustomPersona={customPersona} />
       </section>
 
-      <PanelList initialPanels={panels} initialHasMore={hasMore} />
+      <PanelList initialPanels={panels} initialNext={next} />
     </main>
   )
 }

@@ -4,7 +4,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { DEFAULT_MODEL } from '@/lib/anthropic'
 import { reserveRun, FreeLimitReachedError } from '@/lib/billing/runs'
 import { runPanelJob } from '@/lib/agents/runner'
-import { rateLimit, RateLimitedError, rateLimitedResponse } from '@/lib/limits/rateLimit'
+import { limitInTransaction, RateLimitedError, rateLimitedResponse } from '@/lib/limits/rateLimit'
 
 class RetryRejected extends Error {
   constructor(readonly status: number, message: string) {
@@ -27,7 +27,6 @@ export async function POST(
   const userRef = db.collection('users').doc(user.uid)
 
   try {
-    await rateLimit('debate', { uid: user.uid })
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(panelRef)
       if (!snap.exists) throw new RetryRejected(404, 'Not found')
@@ -35,8 +34,10 @@ export async function POST(
       if (data.userId !== user.uid) throw new RetryRejected(403, 'Forbidden')
       if (data.status !== 'error') throw new RetryRejected(409, 'Panel is not in error state')
 
+      const countDebate = await limitInTransaction(tx, 'debate', user.uid)
       // The failed run was refunded, so a retry counts as a new run.
       const { counted } = await reserveRun(tx, userRef, Date.now())
+      countDebate()
 
       // Start over from round 1.
       tx.update(panelRef, {

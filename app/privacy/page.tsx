@@ -37,9 +37,8 @@ export default function PrivacyPage() {
             renewal date. Card details go straight to Stripe and never reach our servers.
           </li>
           <li>
-            <strong>Abuse protection:</strong> request counters per account, and for sign-ins a
-            one-way hash of your IP address, kept only for the short window the limit applies
-            to.
+            <strong>Abuse protection:</strong> counters of recent requests per account, kept
+            only for the short window each limit applies to.
           </li>
           <li>
             <strong>Server logs:</strong> errors and events with your account ID, kept by our

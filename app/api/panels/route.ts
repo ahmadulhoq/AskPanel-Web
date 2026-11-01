@@ -5,15 +5,14 @@ import { listPanels } from '@/lib/panels/list'
 import { FreeLimitReachedError } from '@/lib/billing/runs'
 import { RateLimitedError, rateLimitedResponse } from '@/lib/limits/rateLimit'
 
-// GET /api/panels?after=<panelId> — the next page of the user's panels (dashboard "Show more").
+// GET /api/panels?cursor=<next from the previous page> — the next page of the user's panels
+// (dashboard "Show more"). Malformed cursors return an empty page.
 export async function GET(request: NextRequest) {
   const user = await getSessionUser()
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  const after = request.nextUrl.searchParams.get('after')
-  const afterId = after && /^[A-Za-z0-9_-]{1,64}$/.test(after) ? after : undefined
-  return NextResponse.json(await listPanels(user.uid, afterId))
+  return NextResponse.json(await listPanels(user.uid, request.nextUrl.searchParams.get('cursor') ?? undefined))
 }
 
 export async function POST(request: NextRequest) {

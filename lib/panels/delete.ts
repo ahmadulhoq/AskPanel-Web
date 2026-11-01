@@ -1,5 +1,5 @@
 import { adminDb } from '@/lib/firebase/admin'
-import { stopPanel } from './stop'
+import { stopPanel, StopRejected } from './stop'
 import type { PanelDoc } from '@/types'
 
 // Deletes one of the user's panels, and its message if it was a debate in a conversation.
@@ -11,9 +11,7 @@ export async function deletePanel(panelId: string, uid: string): Promise<boolean
   const panel = (await ref.get()).data() as PanelDoc | undefined
   if (!panel || panel.userId !== uid) return false
 
-  if (panel.status === 'queued' || panel.status === 'running') {
-    await stopPanel(panelId, uid).catch(() => {}) // it may have just finished
-  }
+  if (panel.status === 'queued' || panel.status === 'running') await stopIfRunning(panelId, uid)
   const batch = db.batch()
   batch.delete(ref)
   if (panel.conversationId && panel.messageId) {
@@ -21,4 +19,14 @@ export async function deletePanel(panelId: string, uid: string): Promise<boolean
   }
   await batch.commit()
   return true
+}
+
+// Stops a debate before deletion so the Stop refund rule applies. "Already finished" is
+// fine; any other failure aborts the deletion rather than skipping the refund.
+export async function stopIfRunning(panelId: string, uid: string) {
+  try {
+    await stopPanel(panelId, uid)
+  } catch (err) {
+    if (!(err instanceof StopRejected)) throw err
+  }
 }

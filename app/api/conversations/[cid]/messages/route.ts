@@ -4,7 +4,7 @@ import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
 import { createPanel } from '@/lib/panels/create'
 import { FreeLimitReachedError } from '@/lib/billing/runs'
-import { rateLimit, RateLimitedError, rateLimitedResponse } from '@/lib/limits/rateLimit'
+import { limitInTransaction, RateLimitedError, rateLimitedResponse } from '@/lib/limits/rateLimit'
 import { reserveReply, ReplyLimitReachedError, FREE_DAILY_REPLIES } from '@/lib/billing/replies'
 import {
   toModelMessages, debateContext, replyHistory, REPLY_BUDGET_CHARS, REPLY_LOAD_MESSAGES, REPLY_SLACK_CHARS,
@@ -95,8 +95,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   try {
-    await rateLimit('reply', { uid: user.uid })
-    await adminDb().runTransaction((tx) => reserveReply(tx, adminDb().collection('users').doc(user.uid), Date.now()))
+    await adminDb().runTransaction(async (tx) => {
+      const countReply = await limitInTransaction(tx, 'reply', user.uid)
+      await reserveReply(tx, adminDb().collection('users').doc(user.uid), Date.now())
+      countReply()
+    })
   } catch (err) {
     if (err instanceof RateLimitedError) return rateLimitedResponse(err)
     if (err instanceof ReplyLimitReachedError) {

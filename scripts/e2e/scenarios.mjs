@@ -239,13 +239,16 @@ await scenario('12. Stop while the Synthesizer call is pending aborts it', async
   assert.equal(p.rounds[0].synthesizer ?? null, null)
 })
 
-await scenario('13. rate limit: the 21st reply in a minute is refused, other users unaffected', async () => {
-  for (let i = 0; i < LIMITS.reply.max; i++) await rateLimit('reply', { uid: 'u13' })
-  await assert.rejects(rateLimit('reply', { uid: 'u13' }), (e) => e instanceof RateLimitedError && e.retryAfterSeconds <= 60)
-  await rateLimit('reply', { uid: 'u13b' })
-  await rateLimit('session', { ip: '203.0.113.7' })
-  const ipDocs = (await db.collection('rateLimits').get()).docs.map((d) => d.id).filter((id) => id.startsWith('session:'))
-  assert.ok(ipDocs.length === 1 && !ipDocs[0].includes('203.0.113.7'), 'IP addresses are stored hashed')
+await scenario('13. rate limits: the 21st reply in a minute is refused; failed debate attempts are not counted', async () => {
+  for (let i = 0; i < LIMITS.reply.max; i++) await rateLimit('reply', 'u13')
+  await assert.rejects(rateLimit('reply', 'u13'), (e) => e instanceof RateLimitedError && e.retryAfterSeconds <= 60)
+  await rateLimit('reply', 'u13b')
+  // A free user out of runs keeps getting 402, never the hourly debate limit.
+  await makeUser('u13c', 'free', 5)
+  for (let i = 0; i < LIMITS.debate.max + 2; i++) {
+    await assert.rejects(createPanel({ uid: 'u13c', question: 'Should we raise a seed round now?', isPublic: false }), (e) => e instanceof FreeLimitReachedError)
+  }
+  assert.equal((await db.collection('rateLimits').doc('debate:u13c').get()).exists, false)
 })
 
 await scenario('14. deleting a running chat debate stops it and removes its message', async () => {
@@ -272,7 +275,7 @@ await scenario('15. deleting an account removes all its data and its sign-in, an
   await makePanel('p15-other', 'u2', { status: 'complete' })
   await db.collection('conversations').doc('c15').set({ userId: 'u15', title: 'x', createdAt: Timestamp.now(), updatedAt: Timestamp.now() })
   await db.collection('conversations').doc('c15').collection('messages').doc('m1').set({ role: 'user', kind: 'text', content: 'hi', panelId: null, status: 'complete', seq: 1 })
-  await rateLimit('reply', { uid: 'u15' })
+  await rateLimit('reply', 'u15')
   await deleteAccount('u15')
   assert.equal(await panel('p15a'), undefined); assert.equal(await panel('p15b'), undefined)
   assert.ok(await panel('p15-other'), "another user's panel is untouched")
@@ -291,12 +294,14 @@ await scenario('16. panel list pages through everything, newest first, without r
   }
   await batch.commit()
   const first = await listPanels('u16')
-  assert.equal(first.panels.length, PANEL_PAGE_SIZE); assert.equal(first.hasMore, true)
+  assert.equal(first.panels.length, PANEL_PAGE_SIZE); assert.ok(first.next)
   assert.equal(first.panels[0].id, `p16-${PANEL_PAGE_SIZE + 4}`)
-  const second = await listPanels('u16', first.panels.at(-1).id)
-  assert.equal(second.panels.length, 5); assert.equal(second.hasMore, false)
+  // The cursor panel is deleted before "Show more": paging still continues after it.
+  await db.collection('panels').doc(first.panels.at(-1).id).delete()
+  const second = await listPanels('u16', first.next)
+  assert.equal(second.panels.length, 5); assert.equal(second.next, null)
   assert.equal(new Set([...first.panels, ...second.panels].map((p) => p.id)).size, PANEL_PAGE_SIZE + 5)
-  assert.deepEqual(await listPanels('u16', 'p1'), { panels: [], hasMore: false }, "another user's panel can't be a cursor")
+  assert.deepEqual(await listPanels('u16', 'garbage'), { panels: [], next: null })
 })
 
 for (const r of results) console.log(r.join('  '))
