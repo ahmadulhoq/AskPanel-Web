@@ -14,6 +14,10 @@ export function getAnthropicClient(): Anthropic {
 // use tool_choice "auto" with strict schemas and a prompt instruction instead.
 export const DEFAULT_MODEL = 'claude-sonnet-5-5'
 
+// Debate turns and verdicts: Sonnet 5.5's default effort, pinned so a model change can't
+// move it silently. The main cost lever — lower effort means less thinking per turn.
+export const DEBATE_EFFORT = 'high' as const
+
 // Small background jobs: conversation titles and running summaries (BL-047 decision).
 // Run with thinking disabled (allowed on Claude Haiku 5.5 at effort high or below).
 export const LIGHT_MODEL = 'claude-haiku-5-5'

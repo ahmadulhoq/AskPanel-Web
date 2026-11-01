@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { resumePoint, historyBefore, firstRoundComplete } from './runState.ts'
+import { resumePoint, historyBefore, firstRoundComplete, parseSynthesis } from './runState.ts'
 import type { PanelRound, RoundSynthesis } from '@/types'
 
 const synth = (decision: RoundSynthesis['decision']): RoundSynthesis =>
@@ -71,4 +71,15 @@ test('firstRoundComplete: only a stored round-1 verdict counts', () => {
   assert.equal(firstRoundComplete([]), false)
   assert.equal(firstRoundComplete([round(1, { respondent: { content: 'r' }, critic: { content: 'c' } })]), false)
   assert.equal(firstRoundComplete([round(1, { respondent: { content: 'r' }, critic: { content: 'c' }, synthesizer: synth('continue') })]), true)
+})
+
+test('parseSynthesis: needs a known decision and an answer; normalises the rest', () => {
+  assert.deepEqual(parseSynthesis({ decision: 'consensus', confidence: 'high', reasoning: ' ok ', issuesFound: 2, finalAnswer: ' A ' }),
+    { decision: 'consensus', confidence: 'high', reasoning: 'ok', issuesFound: 2, finalAnswer: 'A' })
+  assert.equal(parseSynthesis({}), null, 'a tool call cut off before its input')
+  assert.equal(parseSynthesis(null), null)
+  assert.equal(parseSynthesis({ decision: 'maybe', finalAnswer: 'A' }), null)
+  assert.equal(parseSynthesis({ decision: 'consensus', finalAnswer: '  ' }), null)
+  const loose = parseSynthesis({ decision: 'continue', confidence: 'sure', issuesFound: -3, finalAnswer: 'A' })!
+  assert.deepEqual([loose.confidence, loose.issuesFound, loose.reasoning], ['medium', 0, ''])
 })

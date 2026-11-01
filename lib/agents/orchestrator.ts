@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { getAnthropicClient, DEFAULT_MODEL } from '@/lib/anthropic'
+import { getAnthropicClient, DEFAULT_MODEL, DEBATE_EFFORT } from '@/lib/anthropic'
 import { adminDb } from '@/lib/firebase/admin'
 import {
   buildRespondentPrompt,
@@ -8,9 +8,12 @@ import {
   SYNTHESIZER_TOOL,
 } from './prompts'
 import type { OrchestratorInput, SSEGenerator } from './types'
-import { resumePoint, historyBefore } from './runState'
-import type { AgentRole, PanelCompare, SSEEvent, ConfidenceLevel, SynthesisDecision } from '@/types'
+import { resumePoint, historyBefore, parseSynthesis, type Synthesis } from './runState'
+import type { AgentRole, PanelCompare, SSEEvent, ConfidenceLevel } from '@/types'
 import { FieldValue } from 'firebase-admin/firestore'
+
+// Room for thinking (on by default, counted in max_tokens) plus the answer.
+const AGENT_MAX_TOKENS = 16000
 
 // Shared with the compare runner (compare.ts).
 export async function* streamAgent(
@@ -21,19 +24,28 @@ export async function* streamAgent(
 ): AsyncGenerator<{ token?: string; full: string }> {
   const stream = await getAnthropicClient().messages.create({
     model,
-    // Thinking (on by default) counts toward max_tokens; streaming, so a high cap is safe.
-    max_tokens: 16000,
+    max_tokens: AGENT_MAX_TOKENS,
+    output_config: { effort: DEBATE_EFFORT },
     system: [{ type: 'text', text: prompt.system, cache_control: { type: 'ephemeral' } }],
     messages: [{ role: 'user', content: prompt.user }],
     stream: true,
   }, { signal })
 
   let full = ''
+  let stopReason: string | null = null
   for await (const event of stream) {
     if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
       full += event.delta.text
       yield { token: event.delta.text, full }
+    } else if (event.type === 'message_delta') {
+      stopReason = event.delta.stop_reason
     }
+  }
+  // Never store an empty or refused turn as if it were an answer: the next agent would
+  // build on it. (Thinking can use up the whole cap before any text.)
+  if (stopReason === 'refusal') throw new Error(`The ${role} declined to answer`)
+  if (!full.trim()) {
+    throw new Error(stopReason === 'max_tokens' ? `The ${role} ran out of room before answering` : `The ${role} returned an empty answer`)
   }
   yield { full }
 }
@@ -41,28 +53,39 @@ export async function* streamAgent(
 // One structured answer through a tool call (non-streaming tool_use — SACRED S002). Claude
 // Sonnet 5.5 rejects a forced tool_choice with a 400, so the choice is "auto", the tool is
 // strict and the system prompt says to always call it; if the model answers in text anyway,
-// it is asked once more. Returns null if no tool call came back.
+// it is told to call the tool and asked once more. Returns input null if no complete tool
+// call came back (callers report `stopReason`, e.g. max_tokens for a cut-off answer).
 export async function requestToolCall(
   prompt: { system: string; user: string },
   model: string,
   tools: Anthropic.Tool[],
   signal?: AbortSignal,
 ): Promise<{ input: unknown; stopReason: string | null }> {
+  const messages: Anthropic.MessageParam[] = [{ role: 'user', content: prompt.user }]
   let stopReason: string | null = null
   for (let attempt = 0; attempt < 2; attempt++) {
     const response = await getAnthropicClient().messages.create({
       model,
-      // Room for thinking (on by default, counted in max_tokens) plus the tool input.
-      max_tokens: 16000,
+      max_tokens: AGENT_MAX_TOKENS,
+      output_config: { effort: DEBATE_EFFORT },
       system: [{ type: 'text', text: prompt.system, cache_control: { type: 'ephemeral' } }],
       tools,
       tool_choice: { type: 'auto' },
-      messages: [{ role: 'user', content: prompt.user }],
+      messages,
     }, { signal })
-    const toolUse = response.content.find(b => b.type === 'tool_use')
-    if (toolUse?.type === 'tool_use') return { input: toolUse.input, stopReason: response.stop_reason }
     stopReason = response.stop_reason
-    if (stopReason === 'refusal') break
+    // Out of room or refused: a tool call cut off at max_tokens has incomplete input, and
+    // asking again would end the same way.
+    if (stopReason === 'max_tokens' || stopReason === 'refusal') break
+    const toolUse = response.content.find(b => b.type === 'tool_use')
+    if (toolUse?.type === 'tool_use') return { input: toolUse.input, stopReason }
+    // Answered in text: keep that turn and point it at the tool.
+    if (response.content.some(b => b.type === 'text')) {
+      messages.push(
+        { role: 'assistant', content: response.content },
+        { role: 'user', content: `Call the ${tools[0].name} tool with your answer now.` },
+      )
+    }
   }
   return { input: null, stopReason }
 }
@@ -71,18 +94,15 @@ async function callSynthesizer(
   prompt: { system: string; user: string },
   model: string,
   signal?: AbortSignal,
-): Promise<{ decision: SynthesisDecision; confidence: ConfidenceLevel; reasoning: string; issuesFound: number; finalAnswer: string }> {
-  const { input: raw } = await requestToolCall(prompt, model, SYNTHESIZER_TOOL, signal)
-  if (!raw) throw new Error('Synthesizer did not return a tool call')
-
-  const input = raw as {
-    decision: SynthesisDecision
-    confidence: ConfidenceLevel
-    reasoning: string
-    issuesFound: number
-    finalAnswer: string
+): Promise<Synthesis> {
+  const { input, stopReason } = await requestToolCall(prompt, model, SYNTHESIZER_TOOL, signal)
+  const synthesis = parseSynthesis(input)
+  if (!synthesis) {
+    throw new Error(stopReason === 'max_tokens'
+      ? "The synthesizer's verdict was cut off"
+      : 'The synthesizer did not return a usable verdict')
   }
-  return input
+  return synthesis
 }
 
 export class LeaseLostError extends Error {
@@ -201,7 +221,7 @@ export async function* runPanel(input: OrchestratorInput): SSEGenerator {
         decision: synthesis.decision,
         confidence: synthesis.confidence,
         reasoning: synthesis.reasoning,
-        issuesFound: synthesis.issuesFound ?? 0,
+        issuesFound: synthesis.issuesFound,
       }
       await leasedUpdate(panelId, leaseId, (d) => withRound(d, round, { synthesizer: result }))
 

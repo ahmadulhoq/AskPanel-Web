@@ -3,12 +3,16 @@
 // tool_use; non-streaming calls (titles, summaries) get a short text. It also enforces the
 // real API's request rules (forced tool_choice, strict schemas, thinking) — see below.
 //
-// Control endpoints for tests: POST /__control {tokenDelayMs, synthDelayMs, failRole, decision},
-// GET /__stats (calls per role), POST /__reset.
+// Control endpoints for tests: POST /__control {tokenDelayMs, synthDelayMs, failRole, decision,
+// textFirst, starveRole}, GET /__stats (calls per role), POST /__reset.
+//   textFirst: the Synthesizer/Judge answer a first request in text instead of the tool (a
+//     retry that carries that turn on gets the tool call).
+//   starveRole: that role's thinking uses up the cap — streamed turns end with no text, tool
+//     calls are cut off mid-input (stop_reason max_tokens).
 import http from 'node:http'
 
 const PORT = Number(process.env.FAKE_ANTHROPIC_PORT ?? 8099)
-const DEFAULTS = { tokenDelayMs: 40, synthDelayMs: 0, failRole: null, decision: 'consensus' }
+const DEFAULTS = { tokenDelayMs: 40, synthDelayMs: 0, failRole: null, decision: 'consensus', textFirst: false, starveRole: null }
 const ctl = { ...DEFAULTS }
 const calls = { respondent: 0, critic: 0, synthesizer: 0, title: 0, reply: 0, summary: 0, proposer: 0, judge: 0, convene: 0 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -78,79 +82,81 @@ const server = http.createServer(async (req, res) => {
   }
   const role = roleOf(body)
   // A cap too small for the thinking that runs first: the model stops before answering.
-  const starved = thinks(body) && (body.max_tokens ?? 0) < THINKING_TOKENS
+  const tooSmall = (body.max_tokens ?? 0) < THINKING_TOKENS
+  const starved = thinks(body) && (tooSmall || ctl.starveRole === role)
   const thinkingBlock = { type: 'thinking', thinking: '', signature: 'fake-signature' }
+  const msg = { id: 'msg_' + Date.now(), type: 'message', role: 'assistant', model: body.model, stop_sequence: null, usage: { input_tokens: 5, output_tokens: 5 } }
+  const json = (stopReason, content) => {
+    res.setHeader('content-type', 'application/json')
+    res.end(JSON.stringify({ ...msg, stop_reason: stopReason, content }))
+  }
+  // Streams the message start and, when thinking is on, the thinking block that comes
+  // first. Returns the next block's index, or null if the cap ran out while thinking (the
+  // response is then complete).
+  let ev
+  const startStream = () => {
+    res.writeHead(200, { 'content-type': 'text/event-stream' })
+    ev = (type, data) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`)
+    ev('message_start', { message: { ...msg, content: [], stop_reason: null } })
+    if (!thinks(body)) return 0
+    ev('content_block_start', { index: 0, content_block: { type: 'thinking', thinking: '', signature: '' } })
+    ev('content_block_delta', { index: 0, delta: { type: 'signature_delta', signature: 'fake-signature' } })
+    ev('content_block_stop', { index: 0 })
+    if (!starved) return 1
+    endStream('max_tokens')
+    return null
+  }
+  const endStream = (stopReason) => {
+    ev('message_delta', { delta: { stop_reason: stopReason, stop_sequence: null }, usage: { output_tokens: 25 } })
+    ev('message_stop', {})
+    res.end()
+  }
+
   // The coordinator: messages that start with "Should" go to the panel.
   const lastUser = [...(body.messages ?? [])].reverse().find((m) => m.role === 'user')
   const lastText = typeof lastUser?.content === 'string' ? lastUser.content.split('\n\n').at(-1) : ''
   if (role === 'reply' && body.tools?.some((t) => t.name === 'convene_panel') && /^Should/.test(lastText)) {
     calls.convene++
     const input = JSON.stringify({ mode: /\bor\b/.test(lastText) ? 'compare' : 'critique', question: `${lastText} (restated with context)`, reason: 'This is a trade-off worth stress-testing.' })
-    res.writeHead(200, { 'content-type': 'text/event-stream' })
-    const send = (type, data) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`)
-    send('message_start', { message: { id: 'msg_c', type: 'message', role: 'assistant', model: body.model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 5, output_tokens: 1 } } })
-    send('content_block_start', { index: 0, content_block: { type: 'thinking', thinking: '', signature: '' } })
-    send('content_block_delta', { index: 0, delta: { type: 'signature_delta', signature: 'fake-signature' } })
-    send('content_block_stop', { index: 0 })
-    send('content_block_start', { index: 1, content_block: { type: 'tool_use', id: 'toolu_c', name: 'convene_panel', input: {} } })
-    for (const part of input.match(/.{1,12}/gs)) send('content_block_delta', { index: 1, delta: { type: 'input_json_delta', partial_json: part } })
-    send('content_block_stop', { index: 1 })
-    send('message_delta', { delta: { stop_reason: 'tool_use', stop_sequence: null }, usage: { output_tokens: 20 } })
-    send('message_stop', {})
-    return res.end()
+    const at = startStream()
+    if (at === null) return
+    ev('content_block_start', { index: at, content_block: { type: 'tool_use', id: 'toolu_c', name: 'convene_panel', input: {} } })
+    for (const part of input.match(/.{1,12}/gs)) ev('content_block_delta', { index: at, delta: { type: 'input_json_delta', partial_json: part } })
+    ev('content_block_stop', { index: at })
+    return endStream('tool_use')
   }
   calls[role]++
   if (ctl.failRole === role) {
     res.writeHead(500, { 'content-type': 'application/json' })
     return res.end(JSON.stringify({ type: 'error', error: { type: 'api_error', message: `forced ${role} failure` } }))
   }
-  const msg = { id: 'msg_' + Date.now(), type: 'message', role: 'assistant', model: body.model, stop_sequence: null, usage: { input_tokens: 5, output_tokens: 5 } }
-  if (starved && !body.stream) {
-    res.setHeader('content-type', 'application/json')
-    return res.end(JSON.stringify({ ...msg, stop_reason: 'max_tokens', content: [thinkingBlock] }))
-  }
   const lead = thinks(body) ? [thinkingBlock] : []
 
-  if (role === 'judge') {
-    res.setHeader('content-type', 'application/json')
-    return res.end(JSON.stringify({
-      ...msg, stop_reason: 'tool_use',
-      content: [...lead, { type: 'tool_use', id: 'toolu_2', name: 'judge_options', input: {
+  if (role === 'judge' || role === 'synthesizer') {
+    if (role === 'synthesizer') await sleep(ctl.synthDelayMs)
+    const name = body.tools[0].name
+    // Out of room: no tool call at all, or one cut off before its input was complete.
+    if (starved) return json('max_tokens', tooSmall ? [thinkingBlock] : [thinkingBlock, { type: 'tool_use', id: 'toolu_x', name, input: {} }])
+    if (ctl.textFirst && body.messages.length === 1) {
+      return json('end_turn', [...lead, { type: 'text', text: 'My verdict, in prose instead of the tool.' }])
+    }
+    const input = role === 'judge'
+      ? {
         winner: 2, confidence: 'high', reasoning: 'Plan B balances runway and growth.',
         scores: [1, 2, 3].map((option) => ({ option, score: option === 2 ? 8 : 5, summary: `Score for option ${option}.` })),
         finalAnswer: '## Go with Plan B\n\nIt wins on runway. Plan A lost on risk; Plan C lost on speed.',
-      } }],
-    }))
-  }
-  if (role === 'synthesizer') {
-    await sleep(ctl.synthDelayMs)
-    res.setHeader('content-type', 'application/json')
-    return res.end(JSON.stringify({
-      ...msg, stop_reason: 'tool_use',
-      content: [...lead, { type: 'tool_use', id: 'toolu_1', name: body.tools[0].name, input: { decision: ctl.decision, confidence: 'high', reasoning: 'Both agents agree.', issuesFound: 1, finalAnswer: FINAL_ANSWER } }],
-    }))
+      }
+      : { decision: ctl.decision, confidence: 'high', reasoning: 'Both agents agree.', issuesFound: 1, finalAnswer: FINAL_ANSWER }
+    return json('tool_use', [...lead, { type: 'tool_use', id: 'toolu_1', name, input }])
   }
   if (!body.stream) {
-    res.setHeader('content-type', 'application/json')
+    if (starved) return json('max_tokens', [thinkingBlock])
     const text = role === 'summary' ? 'They are planning a product launch next month.' : 'Harness Panel Title'
-    return res.end(JSON.stringify({ ...msg, stop_reason: 'end_turn', content: [...lead, { type: 'text', text }] }))
+    return json('end_turn', [...lead, { type: 'text', text }])
   }
 
-  res.writeHead(200, { 'content-type': 'text/event-stream' })
-  const ev = (type, data) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`)
-  ev('message_start', { message: { ...msg, content: [], stop_reason: null } })
-  let at = 0
-  if (thinks(body)) {
-    ev('content_block_start', { index: 0, content_block: { type: 'thinking', thinking: '', signature: '' } })
-    ev('content_block_delta', { index: 0, delta: { type: 'signature_delta', signature: 'fake-signature' } })
-    ev('content_block_stop', { index: 0 })
-    at = 1
-    if (starved) {
-      ev('message_delta', { delta: { stop_reason: 'max_tokens', stop_sequence: null }, usage: { output_tokens: body.max_tokens } })
-      ev('message_stop', {})
-      return res.end()
-    }
-  }
+  const at = startStream()
+  if (at === null) return
   ev('content_block_start', { index: at, content_block: { type: 'text', text: '' } })
   // Markdown split into small tokens, so rendering of partial markdown is exercised.
   const heading = role === 'proposer' ? `### Plan ${'ABCDEFGH'[(calls.proposer - 1) % 8]}\n\n` : ''
@@ -160,9 +166,7 @@ const server = http.createServer(async (req, res) => {
     await sleep(ctl.tokenDelayMs)
   }
   ev('content_block_stop', { index: at })
-  ev('message_delta', { delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 25 } })
-  ev('message_stop', {})
-  res.end()
+  endStream('end_turn')
 })
 
 server.listen(PORT, '127.0.0.1', () => console.log(`fake Anthropic API on 127.0.0.1:${PORT}`))

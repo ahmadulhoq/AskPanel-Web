@@ -62,6 +62,8 @@ const results = []
 async function scenario(name, fn) {
   await fake('/__reset', {})
   try { await fn(); results.push(['PASS', name]) } catch (e) { results.push(['FAIL', name, e.message]) }
+  // Also after: the browser checks run next against the same fake.
+  await fake('/__reset', {})
 }
 
 await scenario('1. happy path: run completes, viewer gets the full event sequence', async () => {
@@ -413,6 +415,35 @@ await scenario('21. API tokens: capped under concurrency; disabled or revoked ac
   await adminAuth().createUser({ uid: 'u24' })
   const { token: good } = await createApiToken('u24', 'x')
   assert.equal(await verifyApiToken(good), 'u24')
+})
+
+await scenario('22. verdicts: one given in text is asked for again with the tool; a cut-off one fails without a retry', async () => {
+  await fake('/__control', { tokenDelayMs: 2, textFirst: true })
+  await makeUser('u25', 'free', 2)
+  await makePanel('p22a', 'u25', { runCounted: true }); await runPanelJob('p22a')
+  assert.equal((await panel('p22a')).status, 'complete')
+  await makePanel('p22b', 'u25', { runCounted: true, mode: 'compare', compare: { proposals: [], critic: null, judgement: null } })
+  await runPanelJob('p22b')
+  assert.equal((await panel('p22b')).compare.judgement.winner, 2)
+  let s = await fake('/__stats')
+  assert.deepEqual([s.synthesizer, s.judge], [2, 2], 'each verdict asked twice: text, then the tool')
+
+  await fake('/__reset', {}); await fake('/__control', { tokenDelayMs: 2, starveRole: 'synthesizer' })
+  await makePanel('p22c', 'u25', { runCounted: true }); await runPanelJob('p22c')
+  const p = await panel('p22c')
+  assert.equal(p.status, 'error'); assert.match(p.errorMessage, /verdict was cut off/)
+  assert.equal(p.rounds[0].synthesizer, null, 'no verdict stored from a cut-off tool call')
+  s = await fake('/__stats'); assert.equal(s.synthesizer, 1, 'not retried: it would run out of room again')
+  assert.equal((await user('u25')).freeRunsUsed, 1, 'failed run refunded')
+})
+
+await scenario('23. an agent turn that runs out of room before any text fails the run, not stored empty', async () => {
+  await fake('/__control', { tokenDelayMs: 2, starveRole: 'critic' })
+  await makeUser('u26', 'pro', 0); await makePanel('p23', 'u26'); await runPanelJob('p23')
+  const p = await panel('p23')
+  assert.equal(p.status, 'error'); assert.match(p.errorMessage, /critic ran out of room/)
+  assert.ok(p.rounds[0].respondent.content, 'respondent kept'); assert.equal(p.rounds[0].critic, null, 'no empty critic turn')
+  assert.equal((await fake('/__stats')).synthesizer, 0, 'the synthesizer never judged an empty critique')
 })
 
 for (const r of results) console.log(r.join('  '))

@@ -26,7 +26,6 @@ async function* streamTurn(
   return full
 }
 
-
 // Compare-options run (spec §7.3): Proposers → Critic → Judge, one round, resumable after
 // the last stored step. Writes go through the same lease check as critique runs; the
 // critique loop (orchestrator.ts runPanel) is untouched.
@@ -64,8 +63,8 @@ export async function* runCompare(input: OrchestratorInput): SSEGenerator {
     // ── Judge (tool_use, like the Synthesizer) ───────────────────────
     yield { type: 'synthesis_start', round: 1 } satisfies SSEEvent
     const prompt = buildJudgePrompt(question, proposals, critique, context)
-    const { input, stopReason } = await requestToolCall(prompt, model, JUDGE_TOOL, signal)
-    const verdict = parseJudgement(input, proposals.length)
+    const { input: toolInput, stopReason } = await requestToolCall(prompt, model, JUDGE_TOOL, signal)
+    const verdict = parseJudgement(toolInput, proposals.length)
     if (!verdict) {
       throw new Error(stopReason === 'max_tokens'
         ? "The judge's verdict was cut off"
