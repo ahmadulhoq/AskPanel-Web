@@ -9,7 +9,8 @@ import { reserveReply, ReplyLimitReachedError, FREE_DAILY_REPLIES } from '@/lib/
 import {
   toModelMessages, debateContext, replyHistory, REPLY_BUDGET_CHARS, REPLY_LOAD_MESSAGES, REPLY_SLACK_CHARS,
 } from '@/lib/conversations/context'
-import { streamReply } from '@/lib/conversations/reply'
+import { respond } from '@/lib/conversations/respond'
+import { logRouting } from '@/lib/conversations/routingLog'
 import { titleConversation } from '@/lib/conversations/title'
 import { updateSummary } from '@/lib/conversations/summary'
 import { sanitizeDebateSettings } from '@/lib/conversations/settings'
@@ -17,7 +18,7 @@ import {
   conversationRef, getOwnedConversation, loadMessages, messagesRef, nextSeq, toMessageView,
 } from '@/lib/conversations/store'
 import type { NewMessage } from '@/lib/conversations/store'
-import type { ReplyStreamEvent } from '@/types'
+import type { MessageRouting, MessageView } from '@/types'
 
 const MAX_MESSAGE_CHARS = 4000
 const MIN_DEBATE_CHARS = 10
@@ -86,6 +87,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     batch.update(conversationRef(cid), { updatedAt: FieldValue.serverTimestamp(), ...settingsUpdate })
     await batch.commit()
     if (isFirstMessage) titleConversation(cid, content)
+    logRouting(user.uid, cid, assistantRef.id, 'debate_button', debateSettings.mode)
 
     return NextResponse.json({
       messages: [
@@ -95,11 +97,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     })
   }
 
+  let tier: 'free' | 'pro'
   try {
-    await adminDb().runTransaction(async (tx) => {
+    tier = await adminDb().runTransaction(async (tx) => {
       const countReply = await limitInTransaction(tx, 'reply', user.uid)
-      await reserveReply(tx, adminDb().collection('users').doc(user.uid), Date.now())
+      const t = await reserveReply(tx, adminDb().collection('users').doc(user.uid), Date.now())
       countReply()
+      return t
     })
   } catch (err) {
     if (err instanceof RateLimitedError) return rateLimitedResponse(err)
@@ -120,65 +124,51 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   await batch.commit()
 
   const userView = toMessageView(userRef.id, userMessage)
-  const modelMessages = toModelMessages([...unsummarized, userView], REPLY_BUDGET_CHARS + REPLY_SLACK_CHARS, summary)
-  const encoder = new TextEncoder()
-  let closed = false
+  const brief = () => debateContext(unsummarized, undefined, summary)
 
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      const send = (event: ReplyStreamEvent) => {
-        if (closed) return
-        try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
-        } catch {
-          closed = true
-        }
+  // The coordinator (spec §4): the reply model may send the message to the panel. Pro
+  // starts the debate; free gets a proposal to run it or not (the tier rule is enforced
+  // here, not by the model). If the debate can't start, it falls back to a proposal.
+  const route = async (routing: MessageRouting): Promise<MessageView> => {
+    if (tier === 'pro') {
+      try {
+        const panelId = await createPanel({
+          uid: user.uid,
+          question: routing.question,
+          isPublic: false,
+          persona: debateSettings.persona,
+          maxRounds: debateSettings.maxRounds,
+          mode: routing.mode,
+          userContext: brief(),
+          conversationId: cid,
+          messageId: assistantRef.id,
+        })
+        const debate: NewMessage = { ...assistantMessage, kind: 'debate', content: '', panelId, status: 'complete', routing }
+        await assistantRef.update({ kind: 'debate', content: '', panelId, status: 'complete', routing })
+        logRouting(user.uid, cid, assistantRef.id, 'debate', routing.mode)
+        return toMessageView(assistantRef.id, debate, { status: 'queued', finalAnswer: null, confidence: null })
+      } catch (err) {
+        if (!(err instanceof FreeLimitReachedError || err instanceof RateLimitedError)) throw err
       }
-      send({
-        type: 'start',
-        userMessage: toMessageView(userRef.id, userMessage),
-        assistantMessage: toMessageView(assistantRef.id, assistantMessage),
-      })
+    }
+    const proposal: NewMessage = { ...assistantMessage, kind: 'debate_proposal', content: '', status: 'complete', routing }
+    await assistantRef.update({ kind: 'debate_proposal', content: '', status: 'complete', routing })
+    logRouting(user.uid, cid, assistantRef.id, 'propose', routing.mode)
+    return toMessageView(assistantRef.id, proposal)
+  }
 
-      // Generation is not tied to this connection: if the client leaves, the reply still
-      // completes and is saved, and shows up when the conversation is reopened.
-      void (async () => {
-        let text = ''
-        let status: 'complete' | 'error' = 'error'
-        try {
-          for await (const delta of streamReply(modelMessages)) {
-            text += delta
-            send({ type: 'token', text: delta })
-          }
-          await assistantRef.update({ content: text, status: 'complete' })
-          status = 'complete'
-          send({ type: 'done' })
-        } catch (err) {
-          console.error('[conversations] reply failed', cid, err)
-          await assistantRef.update({ content: text, status: 'error' }).catch(() => {})
-          send({ type: 'error', message: 'The reply failed. Try again.' })
-        } finally {
-          if (!closed) {
-            closed = true
-            controller.close()
-          }
-          if (isFirstMessage) await titleConversation(cid, content)
-          const replied = toMessageView(assistantRef.id, { ...assistantMessage, content: text, status })
-          await updateSummary(cid, { history: [...history, userView, replied], summary, summarizedThroughSeq })
-        }
-      })()
-    },
-    cancel() {
-      closed = true
-    },
-  })
-
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no',
+  return respond({
+    cid,
+    assistantRef,
+    assistantMessage,
+    userMessage: userView,
+    modelMessages: toModelMessages([...unsummarized, userView], REPLY_BUDGET_CHARS + REPLY_SLACK_CHARS, summary),
+    route,
+    after: async ({ text, status, routed }) => {
+      if (!routed && status === 'complete') logRouting(user.uid, cid, assistantRef.id, 'answer')
+      if (isFirstMessage) await titleConversation(cid, content)
+      const replied = toMessageView(assistantRef.id, { ...assistantMessage, content: text, status })
+      if (!routed) await updateSummary(cid, { history: [...history, userView, replied], summary, summarizedThroughSeq })
     },
   })
 }

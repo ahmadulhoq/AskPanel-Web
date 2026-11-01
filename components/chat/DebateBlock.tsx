@@ -8,16 +8,19 @@ import { PanelThread } from '@/components/panel/PanelThread'
 import { ConfidenceBadge } from '@/components/panel/ConfidenceBadge'
 import { StopButton } from '@/components/panel/StopButton'
 import { STOPPED_MESSAGE } from '@/lib/panels/constants'
-import type { ConfidenceLevel, MessageView } from '@/types'
+import type { ConfidenceLevel, MessageRouting, MessageView } from '@/types'
 
 interface Props {
   panelId: string
   initial: MessageView['debate']
+  // Set when the assistant convened the panel itself: its reason, and "Just answer".
+  routing?: MessageRouting | null
+  onAnswerInstead?: () => void
 }
 
 // A debate inside a conversation: live and expanded while it runs, collapsed to its
 // verdict once it's done (expand to read the whole debate).
-export function DebateBlock({ panelId, initial }: Props) {
+export function DebateBlock({ panelId, initial, routing, onAnswerInstead }: Props) {
   const [verdict, setVerdict] = useState<{ finalAnswer: string; confidence: ConfidenceLevel } | null>(
     initial?.status === 'complete' && initial.finalAnswer && initial.confidence
       ? { finalAnswer: initial.finalAnswer, confidence: initial.confidence }
@@ -61,6 +64,21 @@ export function DebateBlock({ panelId, initial }: Props) {
           </button>
         </div>
       </div>
+
+      {routing && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2 text-xs text-muted-foreground">
+          <span>Convening the panel — {routing.reason}</span>
+          {!settled && onAnswerInstead && (
+            <button
+              type="button"
+              onClick={onAnswerInstead}
+              className="whitespace-nowrap rounded-full border px-2.5 py-0.5 font-medium text-foreground transition-colors hover:bg-muted"
+            >
+              Just answer
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="border-t px-4 py-4">
         {open ? (

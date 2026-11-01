@@ -26,6 +26,7 @@ export function toMessageView(id: string, m: NewMessage, debate: MessageView['de
     seq: m.seq,
     panelId: m.panelId,
     debate,
+    routing: m.routing ?? null,
   }
 }
 

@@ -11,9 +11,10 @@ export class ReplyLimitReachedError extends Error {
 }
 
 // Counts one quick reply against the free daily allowance inside the caller's transaction.
-export async function reserveReply(tx: Transaction, userRef: DocumentReference, now: number) {
+// Returns the user's tier.
+export async function reserveReply(tx: Transaction, userRef: DocumentReference, now: number): Promise<'free' | 'pro'> {
   const userData = (await tx.get(userRef)).data()
-  if (userData?.subscription?.tier === 'pro') return
+  if (userData?.subscription?.tier === 'pro') return 'pro'
 
   let used: number = userData?.repliesUsed ?? 0
   const resetAt: number = userData?.repliesResetAt?.toMillis() ?? 0
@@ -25,4 +26,5 @@ export async function reserveReply(tx: Transaction, userRef: DocumentReference, 
   if (used >= FREE_DAILY_REPLIES) throw new ReplyLimitReachedError()
   updates.repliesUsed = used + 1
   tx.update(userRef, updates)
+  return 'free'
 }

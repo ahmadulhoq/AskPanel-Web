@@ -9,7 +9,7 @@ import http from 'node:http'
 const PORT = Number(process.env.FAKE_ANTHROPIC_PORT ?? 8099)
 const DEFAULTS = { tokenDelayMs: 40, synthDelayMs: 0, failRole: null, decision: 'consensus' }
 const ctl = { ...DEFAULTS }
-const calls = { respondent: 0, critic: 0, synthesizer: 0, title: 0, reply: 0, summary: 0, proposer: 0, judge: 0 }
+const calls = { respondent: 0, critic: 0, synthesizer: 0, title: 0, reply: 0, summary: 0, proposer: 0, judge: 0, convene: 0 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 const FINAL_ANSWER = '## Verdict\n\nRaise a **small** round.\n\n1. Cut burn first\n2. Then raise'
@@ -18,7 +18,7 @@ const FINAL_ANSWER = '## Verdict\n\nRaise a **small** round.\n\n1. Cut burn firs
 // counted as 'title', so scenarios use built-in personas.
 const roleOf = (body) => {
   if (body.tools?.[0]?.name === 'judge_options') return 'judge'
-  if (body.tools?.length) return 'synthesizer'
+  if (body.tools?.[0]?.name === 'evaluate_debate') return 'synthesizer'
   const system = (body.system ?? []).map((s) => s.text ?? '').join(' ')
   if (/Critic in a/.test(system)) return 'critic'
   if (/Respondent in a/.test(system)) return 'respondent'
@@ -43,6 +43,22 @@ const server = http.createServer(async (req, res) => {
   if (req.url === '/__reset') { for (const k in calls) calls[k] = 0; Object.assign(ctl, DEFAULTS); return res.end('{}') }
 
   const role = roleOf(body)
+  // The coordinator: messages that start with "Should" go to the panel.
+  const lastUser = [...(body.messages ?? [])].reverse().find((m) => m.role === 'user')
+  const lastText = typeof lastUser?.content === 'string' ? lastUser.content.split('\n\n').at(-1) : ''
+  if (role === 'reply' && body.tools?.some((t) => t.name === 'convene_panel') && /^Should/.test(lastText)) {
+    calls.convene++
+    const input = JSON.stringify({ mode: /\bor\b/.test(lastText) ? 'compare' : 'critique', question: `${lastText} (restated with context)`, reason: 'This is a trade-off worth stress-testing.' })
+    res.writeHead(200, { 'content-type': 'text/event-stream' })
+    const send = (type, data) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`)
+    send('message_start', { message: { id: 'msg_c', type: 'message', role: 'assistant', model: body.model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 5, output_tokens: 1 } } })
+    send('content_block_start', { index: 0, content_block: { type: 'tool_use', id: 'toolu_c', name: 'convene_panel', input: {} } })
+    for (const part of input.match(/.{1,12}/gs)) send('content_block_delta', { index: 0, delta: { type: 'input_json_delta', partial_json: part } })
+    send('content_block_stop', { index: 0 })
+    send('message_delta', { delta: { stop_reason: 'tool_use', stop_sequence: null }, usage: { output_tokens: 20 } })
+    send('message_stop', {})
+    return res.end()
+  }
   calls[role]++
   if (ctl.failRole === role) {
     res.writeHead(500, { 'content-type': 'application/json' })

@@ -7,6 +7,7 @@ import { FreeLimitReachedError } from '@/lib/billing/runs'
 import { RateLimitedError, rateLimitedResponse } from '@/lib/limits/rateLimit'
 import { debateContext } from '@/lib/conversations/context'
 import { sanitizeDebateSettings } from '@/lib/conversations/settings'
+import { logRouting } from '@/lib/conversations/routingLog'
 import {
   conversationRef, getOwnedConversation, loadMessages, messagesRef, nextSeq, toMessageView,
 } from '@/lib/conversations/store'
@@ -81,6 +82,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   batch.set(assistantRef, { ...message, createdAt: FieldValue.serverTimestamp() })
   batch.update(conversationRef(cid), { updatedAt: FieldValue.serverTimestamp(), ...settingsUpdate })
   await batch.commit()
+  logRouting(user.uid, cid, history[replyIndex].id, 'debate_this', debateSettings.mode)
 
   return NextResponse.json({
     message: toMessageView(assistantRef.id, message, { status: 'queued', finalAnswer: null, confidence: null }),

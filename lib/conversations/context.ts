@@ -35,6 +35,7 @@ function render(m: ContextMessage): string | null {
     if (d.status === 'error') return '[The panel debate on this question failed — no verdict]'
     return '[A panel debate on this question is still running — no verdict yet]'
   }
+  if (m.kind === 'debate_proposal') return '[Suggested running the panel on this — the user has not run it]'
   if (m.role === 'assistant' && m.status === 'error') return null
   return m.content.trim() || null
 }
