@@ -7,7 +7,7 @@ import { replyHistory, toModelMessages, REPLY_BUDGET_CHARS, REPLY_LOAD_MESSAGES,
 import { respond } from '@/lib/conversations/respond'
 import { logRouting } from '@/lib/conversations/routingLog'
 import { updateSummary } from '@/lib/conversations/summary'
-import { getMessage, getOwnedConversation, loadMessages, messagesRef, toMessageView } from '@/lib/conversations/store'
+import { getMessage, getOwnedConversation, loadMessages, messagesRef, recountDebates, toMessageView } from '@/lib/conversations/store'
 import type { NewMessage } from '@/lib/conversations/store'
 import type { PanelDoc } from '@/types'
 
@@ -60,6 +60,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: 'There is nothing to answer here.' }, { status: 409 })
   }
   logRouting(user.uid, cid, mid, 'just_answer', message.routing.mode)
+  if (panelId) await recountDebates(cid)
 
   const assistantMessage: NewMessage = {
     role: 'assistant', kind: 'text', content: '', panelId: null, status: 'streaming', seq: message.seq, routing: null,

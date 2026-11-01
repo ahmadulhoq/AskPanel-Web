@@ -58,21 +58,21 @@ export default async function AccountPage() {
           </div>
           <CardDescription>
             {tier === 'pro'
-              ? 'Unlimited panel runs, all personas, custom personas, and full context injection.'
-              : 'Limited to 5 panel runs per month. Upgrade for unlimited runs and Pro features.'}
+              ? 'Unlimited debates, all personas, custom personas, and full context injection.'
+              : 'Limited to 5 debates per month. Upgrade for unlimited debates and Pro features.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {tier === 'free' ? (
             <div className="rounded-lg border bg-muted/30 p-4 text-sm">
-              <p className="font-medium">{runsLeft} of {FREE_RUN_LIMIT} runs remaining this month</p>
+              <p className="font-medium">{runsLeft} of {FREE_RUN_LIMIT} debates remaining this month</p>
               {resetDate && (
                 <p className="mt-1 text-muted-foreground">Resets on {resetDate}</p>
               )}
             </div>
           ) : (
             <div className="rounded-lg border bg-muted/30 p-4 text-sm">
-              <p className="font-medium">Unlimited panel runs</p>
+              <p className="font-medium">Unlimited debates</p>
               {renewalDate && (
                 <p className="mt-1 text-muted-foreground">
                   {cancelAtPeriodEnd ? `Ends on ${renewalDate} — it won't renew` : `Renews on ${renewalDate}`}

@@ -25,6 +25,8 @@ const { deletePanel } = await imp('lib/panels/delete.ts')
 const { deleteAccount } = await imp('lib/account/delete.ts')
 const { listPanels, PANEL_PAGE_SIZE } = await imp('lib/panels/list.ts')
 const { adminAuth } = await imp('lib/firebase/admin.ts')
+const { migrateUserPanels } = await imp('lib/conversations/migrate.ts')
+const { listConversations } = await imp('lib/conversations/list.ts')
 const { Timestamp } = await import(pathToFileURL(createRequire(path.join(ROOT, 'package.json')).resolve('firebase-admin/firestore')).href)
 
 const db = adminDb()
@@ -362,6 +364,31 @@ await scenario('19. compare mode Stop: refunded while options are still coming, 
   assert.deepEqual(await stopPanel('p19b', 'u19'), { refunded: false })
   await b
   assert.equal((await user('u19')).freeRunsUsed, 1, 'all options were in: the run counts')
+})
+
+await scenario('20. v1 migration: chains become conversations, idempotently; later follow-ups join their conversation', async () => {
+  const at = (ms) => Timestamp.fromMillis(Date.now() - 86400000 + ms)
+  const v1 = (id, parent, ms) => db.collection('panels').doc(id).set({
+    userId: 'u20', question: `Question ${id}`, title: `Title ${id}`, persona: 'general', status: 'complete', isPublic: false,
+    parentPanelId: parent, confidence: 'high', finalAnswer: `Answer ${id}`, rounds: [], createdAt: at(ms),
+  })
+  await makeUser('u20', 'free', 0)
+  await v1('m-a', null, 1000); await v1('m-b', 'm-a', 2000); await v1('m-c', null, 3000)
+  const flag = async () => Boolean((await user('u20')).v1MigratedAt)
+  // Two dashboard loads at once: both may migrate, the result is the same.
+  await Promise.all([migrateUserPanels('u20', await flag()), migrateUserPanels('u20', await flag())])
+  assert.equal(await flag(), true)
+  assert.equal(await migrateUserPanels('u20', true), 0, 'nothing left to do')
+  const { conversations } = await listConversations('u20')
+  assert.deepEqual(conversations.map((c) => [c.id, c.debateCount]).sort(), [['v1-m-a', 2], ['v1-m-c', 1]])
+  const messages = (await db.collection('conversations').doc('v1-m-a').collection('messages').orderBy('seq').get()).docs.map((d) => d.data())
+  assert.deepEqual(messages.map((m) => [m.role, m.kind, m.panelId]), [['user', 'text', null], ['assistant', 'debate', 'm-a'], ['user', 'text', null], ['assistant', 'debate', 'm-b']])
+  assert.equal((await panel('m-b')).conversationId, 'v1-m-a')
+  // A follow-up created later outside a conversation (conversationId: null) joins its parent's.
+  await v1('m-d', 'm-b', 4000); await db.collection('panels').doc('m-d').update({ conversationId: null })
+  assert.equal(await migrateUserPanels('u20', true), 1)
+  assert.equal((await panel('m-d')).conversationId, 'v1-m-a')
+  assert.equal((await db.collection('conversations').doc('v1-m-a').get()).data().debateCount, 3)
 })
 
 for (const r of results) console.log(r.join('  '))

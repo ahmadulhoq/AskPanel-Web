@@ -2,13 +2,13 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
-import { createPanel } from '@/lib/panels/create'
+import { createPanel, MAX_CONTEXT_CHARS } from '@/lib/panels/create'
 import { panelErrorResponse } from '@/lib/panels/errors'
-import { debateContext } from '@/lib/conversations/context'
+import { debateBrief } from '@/lib/conversations/context'
 import { sanitizeDebateSettings } from '@/lib/conversations/settings'
 import { logRouting } from '@/lib/conversations/routingLog'
 import {
-  conversationRef, getOwnedConversation, loadMessages, messagesRef, nextSeq, toMessageView,
+  conversationRef, getOwnedConversation, recountDebates, loadMessages, messagesRef, nextSeq, toMessageView,
 } from '@/lib/conversations/store'
 import type { NewMessage } from '@/lib/conversations/store'
 import type { ConversationDoc, MessageView } from '@/types'
@@ -18,11 +18,12 @@ import type { ConversationDoc, MessageView } from '@/types'
 // after, so the messages before it are used instead.
 function briefBefore(history: MessageView[], questionIndex: number, conversation: ConversationDoc) {
   const through = conversation.summarizedThroughSeq ?? 0
+  const question = history[questionIndex]
   const before = history.slice(0, questionIndex)
-  if (conversation.summary && history[questionIndex].seq > through) {
-    return debateContext(before.filter((m) => m.seq > through), undefined, conversation.summary)
+  if (conversation.summary && question.seq > through) {
+    return debateBrief(question.context, before.filter((m) => m.seq > through), conversation.summary, MAX_CONTEXT_CHARS)
   }
-  return debateContext(before)
+  return debateBrief(question.context, before, null, MAX_CONTEXT_CHARS)
 }
 
 // "Debate this": run the panel on the user message that a quick reply answered.
@@ -79,6 +80,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   batch.set(assistantRef, { ...message, createdAt: FieldValue.serverTimestamp() })
   batch.update(conversationRef(cid), { updatedAt: FieldValue.serverTimestamp(), ...settingsUpdate })
   await batch.commit()
+  await recountDebates(cid)
   logRouting(user.uid, cid, history[replyIndex].id, 'debate_this', debateSettings.mode)
 
   return NextResponse.json({

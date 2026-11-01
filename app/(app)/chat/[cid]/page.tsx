@@ -44,9 +44,9 @@ export default async function ConversationPage({ params, searchParams }: Props) 
     <div className="flex h-dvh flex-col">
       <header className="border-b bg-background/80 backdrop-blur-sm">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-4 px-4 py-3">
-          <Link href="/chat">
+          <Link href="/dashboard">
             <Button variant="ghost" size="sm" className="-ml-2 text-muted-foreground hover:text-foreground">
-              ← Chats
+              ← All conversations
             </Button>
           </Link>
           <div className="flex min-w-0 items-center gap-1">
@@ -54,7 +54,7 @@ export default async function ConversationPage({ params, searchParams }: Props) 
             <ConfirmDeleteButton
               what="conversation"
               endpoint={`/api/conversations/${cid}`}
-              redirectTo="/chat"
+              redirectTo="/dashboard"
               description="All its messages and the debates started in it are deleted. This can’t be undone."
             />
           </div>

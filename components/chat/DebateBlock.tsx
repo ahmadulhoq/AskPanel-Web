@@ -40,7 +40,7 @@ export function DebateBlock({ panelId, initial, messageId, routing, onAnswerInst
     : failure === 'stopped' ? 'Debate stopped' : failure === 'failed' ? 'Panel debate failed' : 'Panel deliberating…'
 
   return (
-    <div className="rounded-2xl border bg-card" data-message-id={messageId}>
+    <div className="rounded-2xl border bg-card" data-message-id={messageId} data-panel-id={panelId}>
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-3">
         <div className="flex items-center gap-2">
           <Scale className={`h-4 w-4 ${settled ? 'text-muted-foreground' : 'animate-pulse text-primary'}`} />

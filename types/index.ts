@@ -132,6 +132,18 @@ export interface ConversationDoc {
   summarizedThroughSeq?: number
   // Persona and rounds of the last debate started here; the composer reopens with them.
   debateSettings?: DebateSettings
+  // Debates in this conversation (shown in the list).
+  debateCount?: number
+  // Set on conversations created from v1 panels.
+  migratedFrom?: 'v1'
+}
+
+// A conversation in the dashboard list.
+export interface ConversationSummary {
+  id: string
+  title: string | null
+  updatedAt: number // ms
+  debateCount: number
 }
 
 export interface DebateSettings {
@@ -162,6 +174,8 @@ export interface MessageDoc {
   seq: number
   createdAt: Timestamp
   routing?: MessageRouting | null
+  // User messages: context the user attached (pasted, or extracted from a link or file).
+  context?: string | null
 }
 
 // What the chat UI receives for each message (no Timestamps across the RSC boundary).
@@ -175,6 +189,7 @@ export interface MessageView {
   panelId: string | null
   debate: { status: PanelStatus; finalAnswer: string | null; confidence: ConfidenceLevel | null; stopped?: boolean } | null
   routing: MessageRouting | null
+  context: string | null
 }
 
 // Events streamed by POST /api/conversations/[cid]/messages for a quick reply.

@@ -1,12 +1,13 @@
 import Link from 'next/link'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
-import { QuestionComposer } from '@/components/dashboard/QuestionComposer'
-import { PanelList } from '@/components/dashboard/PanelList'
+import { NewConversation } from '@/components/chat/NewConversation'
+import { ConversationList } from '@/components/dashboard/ConversationList'
 import { SignOutButton } from '@/components/auth/SignOutButton'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { listPanels } from '@/lib/panels/list'
+import { listConversations } from '@/lib/conversations/list'
+import { migrateUserPanels } from '@/lib/conversations/migrate'
 
 export const metadata = { title: 'Dashboard — AskPanel' }
 
@@ -34,7 +35,11 @@ export default async function DashboardPage({
   const runsLeft = Math.max(0, 5 - freeRunsUsed)
   const customPersona = userData?.customPersona ?? null
 
-  const { panels, next } = await listPanels(user.uid)
+  // Panels not in a conversation yet (v1 panels, or ones started outside chat) are put into
+  // conversations first, so the list shows everything. Cheap once done.
+  await migrateUserPanels(user.uid, Boolean(userData?.v1MigratedAt))
+    .catch((err) => console.error('[dashboard] migration failed', user.uid, err))
+  const { conversations, next } = await listConversations(user.uid)
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-10">
@@ -43,17 +48,12 @@ export default async function DashboardPage({
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
           {tier === 'free' ? (
             <span>
-              {runsLeft} free run{runsLeft !== 1 ? 's' : ''} left
+              {runsLeft} free debate{runsLeft !== 1 ? 's' : ''} left
               {resetDate && <span className="ml-1 text-xs opacity-70">· resets {resetDate}</span>}
             </span>
           ) : (
             <Badge variant="default">Pro</Badge>
           )}
-          <Link href="/chat">
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-              Chat <span className="ml-1 rounded bg-primary/10 px-1 py-0.5 text-[10px] font-semibold text-primary">BETA</span>
-            </Button>
-          </Link>
           <Link href="/account">
             <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
               Account
@@ -65,15 +65,15 @@ export default async function DashboardPage({
 
       {upgraded === '1' && (
         <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-950/30 dark:text-green-300">
-          You&apos;re now on Pro. Enjoy unlimited panel runs.
+          You&apos;re now on Pro. Enjoy unlimited debates.
         </div>
       )}
 
       <section className="mb-10">
-        <QuestionComposer tier={tier} initialCustomPersona={customPersona} />
+        <NewConversation tier={tier} initialCustomPersona={customPersona} />
       </section>
 
-      <PanelList initialPanels={panels} initialNext={next} />
+      <ConversationList initialConversations={conversations} initialNext={next} />
     </main>
   )
 }

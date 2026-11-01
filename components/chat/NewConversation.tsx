@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { ChatComposer, type SendMode } from './ChatComposer'
 import { DebateSettingsPanel, debateSettingsLabel } from './DebateSettingsPanel'
+import { stashPendingContext } from './pendingContext'
+import { StarterQuestions } from '@/components/dashboard/StarterQuestions'
 import { DEFAULT_DEBATE_SETTINGS } from '@/lib/conversations/settings'
 import type { CustomPersona } from '@/types'
 
@@ -17,6 +19,8 @@ export function NewConversation({ tier, initialCustomPersona }: Props) {
   const [error, setError] = useState('')
   const [settings, setSettings] = useState(DEFAULT_DEBATE_SETTINGS)
   const [customPersona, setCustomPersona] = useState(initialCustomPersona)
+  const [context, setContext] = useState('')
+  const [starter, setStarter] = useState<{ text: string; n: number }>({ text: '', n: 0 })
 
   async function start(content: string, mode: SendMode): Promise<boolean> {
     setError('')
@@ -27,6 +31,8 @@ export function NewConversation({ tier, initialCustomPersona }: Props) {
         return false
       }
       const { conversationId } = await res.json()
+      // Too long for the URL: handed to the conversation page through session storage.
+      if (context.trim()) stashPendingContext(conversationId, context)
       // The conversation page sends this first message and removes it from the URL.
       const params = new URLSearchParams({
         q: content, mode, persona: settings.persona, rounds: String(settings.maxRounds), panel: settings.mode,
@@ -43,11 +49,13 @@ export function NewConversation({ tier, initialCustomPersona }: Props) {
     <div>
       {error && <p className="mb-2 px-2 text-sm text-destructive" role="alert">{error}</p>}
       <ChatComposer
+        key={starter.n}
+        initialText={starter.text}
         onSubmit={start}
         autoFocus
         placeholder="Start a conversation — plans, decisions, anything."
         settings={{
-          label: debateSettingsLabel(settings, customPersona),
+          label: debateSettingsLabel(settings, customPersona, context),
           panel: (
             <DebateSettingsPanel
               tier={tier}
@@ -55,10 +63,15 @@ export function NewConversation({ tier, initialCustomPersona }: Props) {
               onChange={setSettings}
               customPersona={customPersona}
               onCustomPersonaChange={setCustomPersona}
+              context={context}
+              onContextChange={setContext}
             />
           ),
         }}
       />
+      <div className="mt-4">
+        <StarterQuestions onSelect={(text) => setStarter((s) => ({ text, n: s.n + 1 }))} />
+      </div>
     </div>
   )
 }

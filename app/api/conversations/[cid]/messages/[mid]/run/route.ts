@@ -1,13 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getSessionUser } from '@/lib/auth'
-import { createPanel } from '@/lib/panels/create'
+import { createPanel, MAX_CONTEXT_CHARS } from '@/lib/panels/create'
 import { panelErrorResponse } from '@/lib/panels/errors'
-import { debateContext, replyHistory, REPLY_LOAD_MESSAGES } from '@/lib/conversations/context'
+import { debateBrief, replyHistory, REPLY_LOAD_MESSAGES } from '@/lib/conversations/context'
 import { sanitizeDebateSettings } from '@/lib/conversations/settings'
 import { logRouting } from '@/lib/conversations/routingLog'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
-import { getOwnedConversation, loadMessages, messagesRef, toMessageView } from '@/lib/conversations/store'
+import { conversationRef, getOwnedConversation, loadMessages, messagesRef, recountDebates, toMessageView } from '@/lib/conversations/store'
 import type { NewMessage } from '@/lib/conversations/store'
 
 // "Run the panel" on a debate the assistant proposed (free tier, spec §3.2).
@@ -49,7 +49,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       persona: settings.persona,
       maxRounds: settings.maxRounds,
       mode: proposal.routing.mode,
-      userContext: debateContext(before, undefined, conversation.summary ?? null),
+      // The message the assistant proposed debating is the last user message before it.
+      userContext: debateBrief(
+        [...history].reverse().find((m) => m.role === 'user')?.context, before, conversation.summary ?? null, MAX_CONTEXT_CHARS,
+      ),
       conversationId: cid,
       messageId: mid,
     })
@@ -61,6 +64,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   await ref.update({ kind: 'debate', panelId, claimedAt: FieldValue.delete() })
+  await conversationRef(cid).update({ updatedAt: FieldValue.serverTimestamp() }).catch(() => {})
+  await recountDebates(cid)
   logRouting(user.uid, cid, mid, 'run_proposal', proposal.routing.mode)
   const message: NewMessage = {
     role: 'assistant', kind: 'debate', content: '', panelId, status: 'complete', seq: proposal.seq, routing: proposal.routing,

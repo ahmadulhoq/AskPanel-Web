@@ -11,6 +11,7 @@ import { ChatComposer, type SendMode } from './ChatComposer'
 import { DebateBlock } from './DebateBlock'
 import { ProposalCard } from './ProposalCard'
 import { DebateSettingsPanel, debateSettingsLabel } from './DebateSettingsPanel'
+import { takePendingContext } from './pendingContext'
 import type { CustomPersona, DebateSettings, MessageView, ReplyStreamEvent } from '@/types'
 
 interface Props {
@@ -33,6 +34,7 @@ export function ConversationView({
   const [showPaywall, setShowPaywall] = useState(false)
   const [settings, setSettings] = useState(initialSettings)
   const [customPersona, setCustomPersona] = useState(initialCustomPersona)
+  const [context, setContext] = useState('')
 
   const patch = (id: string, change: (m: MessageView) => MessageView) =>
     setMessages((all) => all.map((m) => (m.id === id ? change(m) : m)))
@@ -94,16 +96,17 @@ export function ConversationView({
     return replyId !== null
   }, [])
 
-  const send = useCallback(async (content: string, mode: SendMode): Promise<boolean> => {
+  const send = useCallback(async (content: string, mode: SendMode, attach = context): Promise<boolean> => {
     setError('')
     setBusy(true)
     try {
       const res = await fetch(`/api/conversations/${conversationId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, mode, settings }),
+        body: JSON.stringify({ content, mode, settings, context: attach || undefined }),
       })
       if (!res.ok) return await handleFailure(res)
+      setContext('')
 
       if (mode === 'debate') {
         const { messages: added } = (await res.json()) as { messages: MessageView[] }
@@ -117,7 +120,7 @@ export function ConversationView({
     } finally {
       setBusy(false)
     }
-  }, [conversationId, handleFailure, settings, readReply])
+  }, [conversationId, handleFailure, settings, readReply, context])
 
   const debateReply = useCallback(async (messageId: string) => {
     setError('')
@@ -188,7 +191,7 @@ export function ConversationView({
     if (!pending || sentPending.current) return
     sentPending.current = true
     router.replace(`/chat/${conversationId}`, { scroll: false })
-    send(pending.content, pending.mode)
+    send(pending.content, pending.mode, takePendingContext(conversationId))
   }, [pending, conversationId, router, send])
 
   return (
@@ -202,7 +205,7 @@ export function ConversationView({
         )}
         {messages.map((m) =>
           m.role === 'user' ? (
-            <QuestionBubble key={m.id} question={m.content} />
+            <QuestionBubble key={m.id} question={m.content} context={m.context} />
           ) : m.kind === 'debate_proposal' && m.routing ? (
             <ProposalCard
               key={m.id}
@@ -234,7 +237,7 @@ export function ConversationView({
           disabled={busy}
           autoFocus
           settings={{
-            label: debateSettingsLabel(settings, customPersona),
+            label: debateSettingsLabel(settings, customPersona, context),
             panel: (
               <DebateSettingsPanel
                 tier={tier}
@@ -242,6 +245,8 @@ export function ConversationView({
                 onChange={setSettings}
                 customPersona={customPersona}
                 onCustomPersonaChange={setCustomPersona}
+                context={context}
+                onContextChange={setContext}
               />
             ),
           }}

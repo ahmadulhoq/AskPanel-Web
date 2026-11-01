@@ -2,14 +2,14 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
-import { createPanel } from '@/lib/panels/create'
+import { createPanel, MAX_CONTEXT_CHARS } from '@/lib/panels/create'
 import { stopIfRunning } from '@/lib/panels/delete'
 import { panelErrorResponse } from '@/lib/panels/errors'
 import { FreeLimitReachedError } from '@/lib/billing/runs'
 import { limitInTransaction, RateLimitedError, rateLimitedResponse } from '@/lib/limits/rateLimit'
 import { reserveReply, ReplyLimitReachedError, FREE_DAILY_REPLIES } from '@/lib/billing/replies'
 import {
-  toModelMessages, debateContext, replyHistory, REPLY_BUDGET_CHARS, REPLY_LOAD_MESSAGES, REPLY_SLACK_CHARS,
+  toModelMessages, debateBrief, replyHistory, REPLY_BUDGET_CHARS, REPLY_LOAD_MESSAGES, REPLY_SLACK_CHARS,
 } from '@/lib/conversations/context'
 import { respond } from '@/lib/conversations/respond'
 import { logRouting } from '@/lib/conversations/routingLog'
@@ -17,7 +17,7 @@ import { titleConversation } from '@/lib/conversations/title'
 import { updateSummary } from '@/lib/conversations/summary'
 import { sanitizeDebateSettings } from '@/lib/conversations/settings'
 import {
-  conversationRef, getOwnedConversation, loadMessages, messagesRef, nextSeq, toMessageView,
+  conversationRef, getOwnedConversation, recountDebates, loadMessages, messagesRef, nextSeq, toMessageView,
 } from '@/lib/conversations/store'
 import type { NewMessage } from '@/lib/conversations/store'
 import type { MessageRouting, MessageView } from '@/types'
@@ -38,6 +38,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const body = await request.json().catch(() => ({}))
   const content = typeof body.content === 'string' ? body.content.trim() : ''
+  // Context attached to this message (pasted, or extracted from a link or file).
+  const attachedContext = typeof body.context === 'string' && body.context.trim()
+    ? body.context.trim().slice(0, MAX_CONTEXT_CHARS)
+    : null
   const mode = body.mode === 'debate' ? 'debate' : 'reply'
   // Remembered on the conversation so the composer reopens with the same panel.
   const debateSettings = sanitizeDebateSettings(body.settings)
@@ -57,7 +61,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const seq = nextSeq(history)
   const userRef = messagesRef(cid).doc()
   const assistantRef = messagesRef(cid).doc()
-  const userMessage: NewMessage = { role: 'user', kind: 'text', content, panelId: null, status: 'complete', seq }
+  const userMessage: NewMessage = {
+    role: 'user', kind: 'text', content, panelId: null, status: 'complete', seq, ...(attachedContext ? { context: attachedContext } : {}),
+  }
+  // A debate's brief: the attached context first, then the conversation so far.
+  const brief = () => debateBrief(attachedContext, unsummarized, summary, MAX_CONTEXT_CHARS)
+  // Assistant messages never carry the user's attachment.
+  const assistantBase: NewMessage = { role: 'assistant', kind: 'text', content: '', panelId: null, status: 'complete', seq: seq + 1 }
   const created = { createdAt: FieldValue.serverTimestamp() }
   const isFirstMessage = history.length === 0 && !conversation.title
 
@@ -71,7 +81,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         persona: debateSettings.persona,
         maxRounds: debateSettings.maxRounds,
         mode: debateSettings.mode,
-        userContext: debateContext(unsummarized, undefined, summary),
+        userContext: brief(),
         conversationId: cid,
         messageId: assistantRef.id,
       })
@@ -80,12 +90,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (refused) return refused
       throw err
     }
-    const assistantMessage: NewMessage = { ...userMessage, role: 'assistant', kind: 'debate', content: '', panelId, seq: seq + 1 }
+    const assistantMessage: NewMessage = { ...assistantBase, kind: 'debate', panelId }
     const batch = adminDb().batch()
     batch.set(userRef, { ...userMessage, ...created })
     batch.set(assistantRef, { ...assistantMessage, ...created })
     batch.update(conversationRef(cid), { updatedAt: FieldValue.serverTimestamp(), ...settingsUpdate })
     await batch.commit()
+    await recountDebates(cid)
     if (isFirstMessage) titleConversation(cid, content)
     logRouting(user.uid, cid, assistantRef.id, 'debate_button', debateSettings.mode)
 
@@ -116,7 +127,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     throw err
   }
 
-  const assistantMessage: NewMessage = { ...userMessage, role: 'assistant', content: '', status: 'streaming', seq: seq + 1 }
+  const assistantMessage: NewMessage = { ...assistantBase, status: 'streaming' }
   const batch = adminDb().batch()
   batch.set(userRef, { ...userMessage, ...created })
   batch.set(assistantRef, { ...assistantMessage, ...created })
@@ -124,7 +135,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   await batch.commit()
 
   const userView = toMessageView(userRef.id, userMessage)
-  const brief = () => debateContext(unsummarized, undefined, summary)
 
   // The coordinator (spec §4): the reply model may send the message to the panel. Pro
   // starts the debate; free gets a proposal to run it or not (the tier rule is enforced
@@ -146,6 +156,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const debate: NewMessage = { ...assistantMessage, kind: 'debate', content: '', panelId, status: 'complete', routing }
         try {
           await assistantRef.update({ kind: 'debate', content: '', panelId, status: 'complete', routing })
+          await recountDebates(cid)
         } catch (err) {
           // Don't leave a debate running that the conversation can't show.
           await stopIfRunning(panelId, user.uid).catch(() => {})

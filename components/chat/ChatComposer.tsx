@@ -15,10 +15,12 @@ interface Props {
   autoFocus?: boolean
   // Debate settings: a summary chip in the toolbar that toggles the settings panel.
   settings?: { label: string; panel: ReactNode }
+  // Starting text (e.g. a starter question); remount with a new key to replace it.
+  initialText?: string
 }
 
-export function ChatComposer({ onSubmit, disabled = false, placeholder, autoFocus = false, settings }: Props) {
-  const [text, setText] = useState('')
+export function ChatComposer({ onSubmit, disabled = false, placeholder, autoFocus = false, settings, initialText = '' }: Props) {
+  const [text, setText] = useState(initialText)
   const [submitting, setSubmitting] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)

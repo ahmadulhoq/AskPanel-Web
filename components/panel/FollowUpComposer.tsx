@@ -47,7 +47,7 @@ export function FollowUpComposer({ parentPanelId, parentPersona, parentIsPublic 
         }),
       })
       if (res.status === 402) {
-        setError("You've used all your free runs. Upgrade to Pro to continue.")
+        setError("You've used all your free debates. Upgrade to Pro to continue.")
         return
       }
       if (!res.ok) {

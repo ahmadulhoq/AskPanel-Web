@@ -41,9 +41,9 @@ export default async function PanelPage({ params }: Props) {
     <div className="flex h-dvh flex-col">
       <header className="z-10 border-b bg-background/80 backdrop-blur-sm">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
-          <Link href="/dashboard">
+          <Link href={panel.conversationId ? `/chat/${panel.conversationId}` : '/dashboard'}>
             <Button variant="ghost" size="sm" className="-ml-2 text-muted-foreground hover:text-foreground">
-              ← Dashboard
+              {panel.conversationId ? '← Conversation' : '← Dashboard'}
             </Button>
           </Link>
           <div className="flex items-center gap-1">
@@ -62,7 +62,15 @@ export default async function PanelPage({ params }: Props) {
 
       <ThreadScroller className="mx-auto w-full max-w-2xl px-4 py-8">
         <QuestionBubble question={panel.question} />
-        <PanelThread panelId={panelId} persona={panel.persona ?? 'general'} isPublic={panel.isPublic} />
+        {/* Follow-ups happen in the conversation the debate belongs to. */}
+        <PanelThread panelId={panelId} persona={panel.persona ?? 'general'} isPublic={panel.isPublic} showFollowUp={!panel.conversationId} />
+        {panel.conversationId && (
+          <p className="mt-8 text-center text-sm">
+            <Link href={`/chat/${panel.conversationId}`} className="text-muted-foreground underline underline-offset-4 hover:text-foreground">
+              Continue in the conversation →
+            </Link>
+          </p>
+        )}
       </ThreadScroller>
     </div>
   )
