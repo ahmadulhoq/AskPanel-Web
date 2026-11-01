@@ -6,7 +6,8 @@ import { PersonaSelector } from '@/components/panel/PersonaSelector'
 import { ContextInput } from '@/components/panel/ContextInput'
 import { StarterQuestions } from './StarterQuestions'
 import { RoundsSelector } from './RoundsSelector'
-import type { CustomPersona } from '@/types'
+import { ModeSelector } from '@/components/panel/ModeSelector'
+import type { CustomPersona, PanelMode } from '@/types'
 
 interface Props {
   tier: 'free' | 'pro'
@@ -19,6 +20,7 @@ export function QuestionComposer({ tier, initialCustomPersona = null }: Props) {
   const [persona, setPersona] = useState('general')
   const [userContext, setUserContext] = useState('')
   const [maxRounds, setMaxRounds] = useState(2)
+  const [mode, setMode] = useState<PanelMode>('critique')
   const [customPersona, setCustomPersona] = useState<CustomPersona | null>(initialCustomPersona)
 
   return (
@@ -42,9 +44,11 @@ export function QuestionComposer({ tier, initialCustomPersona = null }: Props) {
         persona={persona}
         userContext={userContext}
         maxRounds={maxRounds}
+        mode={mode}
       />
       <div className="mt-3 px-1">
-        <RoundsSelector value={maxRounds} onChange={setMaxRounds} tier={tier} />
+        <ModeSelector value={mode} onChange={setMode} />
+        {mode === 'critique' && <RoundsSelector value={maxRounds} onChange={setMaxRounds} tier={tier} />}
       </div>
     </div>
   )

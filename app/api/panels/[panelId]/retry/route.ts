@@ -4,6 +4,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { DEFAULT_MODEL } from '@/lib/anthropic'
 import { reserveRun, FreeLimitReachedError } from '@/lib/billing/runs'
 import { runPanelJob } from '@/lib/agents/runner'
+import { emptyCompare } from '@/lib/agents/compareState'
 import { limitInTransaction, RateLimitedError, rateLimitedResponse } from '@/lib/limits/rateLimit'
 
 class RetryRejected extends Error {
@@ -50,6 +51,7 @@ export async function POST(
         live: null,
         run: null,
         stoppedAt: null,
+        compare: data.mode === 'compare' ? emptyCompare() : null,
         runCounted: counted,
         'config.model': DEFAULT_MODEL,
       })

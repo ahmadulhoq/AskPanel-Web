@@ -12,15 +12,24 @@ const AGENT_META = {
     initial: 'C',
     avatar: 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300',
   },
+  proposer: {
+    label: 'Option',
+    initial: 'O',
+    avatar: 'bg-violet-100 text-violet-700 dark:bg-violet-900/60 dark:text-violet-300',
+  },
 }
 
 interface Props {
   turn: AgentTurnState
   issuesFound?: number
+  // Compare mode: this proposer's option won.
+  winner?: boolean
 }
 
-export function AgentTurn({ turn, issuesFound }: Props) {
-  const meta = AGENT_META[turn.agent]
+export function AgentTurn({ turn, issuesFound, winner = false }: Props) {
+  const base = AGENT_META[turn.agent]
+  const option = turn.agent === 'proposer' ? (turn.index ?? 0) + 1 : null
+  const meta = option ? { ...base, label: `Option ${option}`, initial: String(option) } : base
 
   return (
     <div className="flex gap-3">
@@ -30,6 +39,11 @@ export function AgentTurn({ turn, issuesFound }: Props) {
       <div className="flex-1 min-w-0">
         <div className="mb-1.5 flex items-center gap-2">
           <span className="text-sm font-semibold">{meta.label}</span>
+          {winner && (
+            <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
+              Winner
+            </span>
+          )}
           {turn.agent === 'critic' && issuesFound != null && issuesFound > 0 && (
             <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
               {issuesFound} issue{issuesFound !== 1 ? 's' : ''} found

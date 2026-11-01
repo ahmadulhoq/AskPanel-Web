@@ -180,6 +180,26 @@ try {
   check('no horizontal overflow at phone width', !overflow)
   await page.setViewportSize({ width: 1280, height: 650 })
 
+  // ── Compare options ───────────────────────────────────────────────────
+  await fake('/__control', { tokenDelayMs: 10 })
+  await page.goto(BASE + '/dashboard')
+  await page.getByRole('radio', { name: 'Compare options' }).click()
+  check('compare mode hides the rounds picker', await page.getByText('Debate rounds').count() === 0)
+  await page.locator('textarea').first().fill('Bootstrap for a year, raise a seed round, or take a loan?')
+  await page.keyboard.press('Enter')
+  await page.waitForURL(/\/panel\//, { timeout: 15000 })
+  const compareUrl = page.url()
+  await page.getByText('Option 2 wins').waitFor({ timeout: 60000 })
+  const optionLabels = await page.getByText(/^Option [123]$/).count()
+  check('compare mode: three options, a winner, and the judge\'s answer',
+    optionLabels === 3 && await page.getByText('Winner', { exact: true }).count() === 1 && await page.getByRole('heading', { name: 'Go with Plan B' }).count() === 1,
+    `option labels: ${optionLabels}`)
+  await page.getByText('Option 2 wins').scrollIntoViewIfNeeded()
+  await page.screenshot({ path: `${SHOTS}/11-compare.png` })
+  await page.goto(compareUrl.replace('/panel/', '/p/'))
+  check('a shared compare panel shows the options and the winner',
+    await page.getByText('Option 2 wins').isVisible() && await page.getByText(/^Option [123]$/).count() === 3)
+
   // ── Launch basics: legal pages, paging, deletion ─────────────────────
   await page.goto(BASE + '/')
   check('landing page links to the privacy policy and terms',

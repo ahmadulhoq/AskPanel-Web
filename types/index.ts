@@ -2,7 +2,10 @@ import type { Timestamp } from 'firebase/firestore'
 
 export type SubscriptionTier = 'free' | 'pro'
 export type PanelStatus = 'queued' | 'running' | 'complete' | 'error'
-export type AgentRole = 'respondent' | 'critic'
+export type AgentRole = 'respondent' | 'critic' | 'proposer'
+// 'critique' (absent on older panels): Respondent ↔ Critic rounds + Synthesizer.
+// 'compare': Proposers each put forward an option, a Critic tests them, a Judge picks one.
+export type PanelMode = 'critique' | 'compare'
 export type SynthesisDecision = 'continue' | 'consensus' | 'contested'
 export type ConfidenceLevel = 'high' | 'medium' | 'low' | 'contested'
 
@@ -47,6 +50,26 @@ export interface PanelRound {
   synthesizer: RoundSynthesis | null
 }
 
+export interface CompareScore {
+  option: number // 1-based
+  score: number // 1–10
+  summary: string
+}
+
+export interface CompareJudgement {
+  winner: number // 1-based option number
+  scores: CompareScore[]
+  reasoning: string
+  confidence: ConfidenceLevel
+}
+
+// Progress of a compare-mode panel (one round).
+export interface PanelCompare {
+  proposals: { content: string }[]
+  critic: { content: string } | null
+  judgement: CompareJudgement | null
+}
+
 export interface PanelConfig {
   maxRounds: number
   model: string
@@ -78,12 +101,16 @@ export interface PanelDoc {
   runCounted?: boolean
   // Set when the owner pressed Stop (status is then 'error').
   stoppedAt?: number | null
+  mode?: PanelMode
+  compare?: PanelCompare | null
 }
 
 // In-progress agent text, flushed by the runner about once a second.
 export interface LiveTurn {
   agent: AgentRole
   round: number
+  // Which proposer (0-based), in compare mode.
+  index?: number
   content: string
   runId: string
 }
@@ -110,6 +137,7 @@ export interface ConversationDoc {
 export interface DebateSettings {
   persona: string
   maxRounds: number
+  mode: PanelMode
 }
 
 export type MessageKind = 'text' | 'debate'
@@ -148,11 +176,12 @@ export type ReplyStreamEvent =
 
 // SSE event types
 export type SSEEvent =
-  | { type: 'agent_start'; agent: AgentRole; round: number }
-  | { type: 'agent_token'; agent: AgentRole; token: string }
-  | { type: 'agent_complete'; agent: AgentRole; round: number; content: string }
+  | { type: 'agent_start'; agent: AgentRole; round: number; index?: number }
+  | { type: 'agent_token'; agent: AgentRole; index?: number; token: string }
+  | { type: 'agent_complete'; agent: AgentRole; round: number; index?: number; content: string }
   | { type: 'synthesis_start'; round: number }
   | { type: 'synthesis_result'; round: number; decision: SynthesisDecision; confidence: ConfidenceLevel; reasoning: string; issuesFound: number }
+  | ({ type: 'compare_result' } & CompareJudgement)
   | { type: 'panel_complete'; finalAnswer: string; confidence: ConfidenceLevel }
   | { type: 'error'; message: string }
 
@@ -160,6 +189,7 @@ export type SSEEvent =
 export interface AgentTurnState {
   agent: AgentRole
   round: number
+  index?: number
   content: string
   streaming: boolean
 }
@@ -176,6 +206,7 @@ export interface PanelState {
   status: 'idle' | 'running' | 'complete' | 'error'
   turns: AgentTurnState[]
   syntheses: SynthesisState[]
+  comparison: CompareJudgement | null
   finalAnswer: string | null
   confidence: ConfidenceLevel | null
   errorMessage: string | null

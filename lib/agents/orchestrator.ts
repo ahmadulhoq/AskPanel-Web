@@ -9,11 +9,12 @@ import {
 } from './prompts'
 import type { OrchestratorInput, SSEGenerator } from './types'
 import { resumePoint, historyBefore } from './runState'
-import type { SSEEvent, ConfidenceLevel, SynthesisDecision } from '@/types'
+import type { AgentRole, PanelCompare, SSEEvent, ConfidenceLevel, SynthesisDecision } from '@/types'
 import { FieldValue } from 'firebase-admin/firestore'
 
-async function* streamAgent(
-  role: 'respondent' | 'critic',
+// Shared with the compare runner (compare.ts).
+export async function* streamAgent(
+  role: AgentRole,
   prompt: { system: string; user: string },
   model: string,
   signal?: AbortSignal,
@@ -71,10 +72,15 @@ export class LeaseLostError extends Error {
   }
 }
 
-type PanelData = { rounds?: Record<string, unknown>[]; run?: { id?: string } | null }
+export type PanelData = {
+  rounds?: Record<string, unknown>[]
+  run?: { id?: string } | null
+  compare?: PanelCompare | null
+}
 
 // Read-modify-write in a transaction, refused if another runner has taken over the panel.
-async function leasedUpdate(
+// Shared with the compare runner (compare.ts).
+export async function leasedUpdate(
   panelId: string,
   leaseId: string | undefined,
   build: (data: PanelData) => Record<string, unknown>,

@@ -1,5 +1,6 @@
 'use client'
 
+import type { PanelMode } from '@/types'
 import { useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowUp, Lock, Globe } from 'lucide-react'
@@ -18,9 +19,10 @@ interface Props {
   parentPanelId?: string
   userContext?: string
   maxRounds?: number
+  mode?: PanelMode
 }
 
-export function PanelInput({ question, onQuestionChange, isPublic, onIsPublicChange, persona = 'general', parentPanelId, userContext, maxRounds }: Props) {
+export function PanelInput({ question, onQuestionChange, isPublic, onIsPublicChange, persona = 'general', parentPanelId, userContext, maxRounds, mode = 'critique' }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [showPaywall, setShowPaywall] = useState(false)
@@ -51,7 +53,7 @@ export function PanelInput({ question, onQuestionChange, isPublic, onIsPublicCha
       const res = await fetch('/api/panels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: trimmed, isPublic, persona, parentPanelId, userContext: userContext || undefined, maxRounds }),
+        body: JSON.stringify({ question: trimmed, isPublic, persona, parentPanelId, userContext: userContext || undefined, maxRounds, mode }),
       })
 
       if (res.status === 402) {
@@ -72,7 +74,7 @@ export function PanelInput({ question, onQuestionChange, isPublic, onIsPublicCha
     } finally {
       setLoading(false)
     }
-  }, [question, isPublic, persona, parentPanelId, loading, router, userContext, maxRounds])
+  }, [question, isPublic, persona, parentPanelId, loading, router, userContext, maxRounds, mode])
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

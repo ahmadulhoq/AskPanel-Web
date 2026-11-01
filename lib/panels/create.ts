@@ -6,6 +6,7 @@ import { PERSONA_MAP } from '@/lib/agents/personas'
 import { runPanelJob } from '@/lib/agents/runner'
 import { reserveRun } from '@/lib/billing/runs'
 import { limitInTransaction } from '@/lib/limits/rateLimit'
+import { emptyCompare } from '@/lib/agents/compareState'
 
 export const MAX_CONTEXT_CHARS = 4000
 
@@ -15,6 +16,8 @@ export interface CreatePanelInput {
   isPublic: boolean
   persona?: unknown
   maxRounds?: unknown
+  // 'compare' runs the compare-options panel; anything else is a critique.
+  mode?: unknown
   userContext?: unknown
   parentPanelId?: unknown
   conversationId?: string
@@ -34,6 +37,7 @@ export async function createPanel(input: CreatePanelInput): Promise<string> {
     ? input.persona
     : 'general'
 
+  const mode = input.mode === 'compare' ? 'compare' : 'critique'
   const userContext = typeof input.userContext === 'string' && input.userContext.trim()
     ? input.userContext.slice(0, MAX_CONTEXT_CHARS).trim()
     : null
@@ -84,6 +88,8 @@ export async function createPanel(input: CreatePanelInput): Promise<string> {
       parentPanelId,
       conversationId: input.conversationId ?? null,
       messageId: input.messageId ?? null,
+      mode,
+      compare: mode === 'compare' ? emptyCompare() : null,
       context,
       status: 'queued',
       isPublic: input.isPublic,

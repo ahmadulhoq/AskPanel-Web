@@ -78,7 +78,7 @@ await scenario('1. happy path: run completes, viewer gets the full event sequenc
   assert.ok(completed.startsWith(tokens.map((t) => t.token).join('')), 'streamed deltas are a prefix of the final text')
   console.log('   respondent live updates:', tokens.length)
   assert.equal(count(w.events, 'agent_start', 'respondent'), 1); assert.equal(count(w.events, 'agent_start', 'critic'), 1)
-  assert.deepEqual(await fake('/__stats'), { respondent: 1, critic: 1, synthesizer: 1, title: 1, reply: 0, summary: 0 })
+  assert.deepEqual(await fake('/__stats'), { respondent: 1, critic: 1, synthesizer: 1, title: 1, reply: 0, summary: 0, proposer: 0, judge: 0 })
   assert.equal((await user('u1')).freeRunsUsed, 1, 'successful run is not refunded')
 })
 
@@ -302,6 +302,66 @@ await scenario('16. panel list pages through everything, newest first, without r
   assert.equal(second.panels.length, 5); assert.equal(second.next, null)
   assert.equal(new Set([...first.panels, ...second.panels].map((p) => p.id)).size, PANEL_PAGE_SIZE + 5)
   assert.deepEqual(await listPanels('u16', 'garbage'), { panels: [], next: null })
+})
+
+await scenario('17. compare mode: three proposers, a critic and a judge; viewers see it all', async () => {
+  await fake('/__control', { tokenDelayMs: 5 })
+  await makeUser('u17', 'pro', 0)
+  const id = await createPanel({ uid: 'u17', question: 'Bootstrap, raise a seed round, or take a loan?', isPublic: true, mode: 'compare', persona: 'startup' })
+  const w = watch(id)
+  await w.done
+  await until(async () => (await panel(id))?.title, 'title (written just after completion)')
+  const p = await panel(id)
+  assert.equal(p.status, 'complete'); assert.equal(p.mode, 'compare')
+  assert.equal(p.compare.proposals.length, 3); assert.ok(p.compare.critic)
+  assert.equal(p.compare.judgement.winner, 2); assert.equal(p.compare.judgement.scores.length, 3)
+  assert.match(p.finalAnswer, /Plan B/); assert.equal(p.confidence, 'high'); assert.equal(p.title, 'Harness Panel Title')
+  const s = await fake('/__stats')
+  assert.deepEqual([s.proposer, s.critic, s.judge, s.respondent, s.synthesizer], [3, 1, 1, 0, 0])
+  const starts = w.events.filter((e) => e.type === 'agent_start' && e.agent === 'proposer').map((e) => e.index)
+  assert.deepEqual([...new Set(starts)], [0, 1, 2])
+  assert.equal(w.events.filter((e) => e.type === 'compare_result').length, 1)
+  assert.equal(w.events.at(-1).type, 'panel_complete')
+})
+
+await scenario('18. compare mode: a runner killed during proposer 2 resumes at proposer 2', async () => {
+  await fake('/__control', { tokenDelayMs: 120 })
+  await makeUser('u18', 'pro', 0)
+  await makePanel('p18', 'u18', { mode: 'compare', compare: { proposals: [], critic: null, judgement: null } })
+  const child = spawn(process.execPath, ['--import', path.join(HERE, 'register.mjs'), path.join(HERE, 'run-one.mjs'), 'p18'], { stdio: 'ignore', env: process.env })
+  try {
+    await until(async () => { const p = await panel('p18'); return p?.live?.agent === 'proposer' && p.live.index === 1 }, 'proposer 2 to start')
+    await sleep(500)
+  } finally {
+    child.kill('SIGKILL')
+  }
+  const first = (await panel('p18')).compare.proposals[0].content
+  await db.collection('panels').doc('p18').update({ 'run.heartbeatAt': Date.now() - 120000 })
+  await fake('/__control', { tokenDelayMs: 5 })
+  await runPanelJob('p18')
+  const p = await panel('p18')
+  assert.equal(p.status, 'complete')
+  assert.equal(p.compare.proposals.length, 3)
+  assert.equal(p.compare.proposals[0].content, first, 'stored proposal 1 untouched')
+  assert.equal((await fake('/__stats')).proposer, 4, 'proposer 1 once, proposer 2 twice (killed + resumed), proposer 3 once')
+})
+
+await scenario('19. compare mode Stop: refunded while options are still coming, not after', async () => {
+  await fake('/__control', { tokenDelayMs: 60 })
+  await makeUser('u19', 'free', 2)
+  await makePanel('p19a', 'u19', { runCounted: true, mode: 'compare', compare: { proposals: [], critic: null, judgement: null } })
+  const a = runPanelJob('p19a')
+  await until(async () => (await panel('p19a'))?.live?.index === 1, 'proposer 2 to start')
+  assert.deepEqual(await stopPanel('p19a', 'u19'), { refunded: true })
+  await a
+  assert.equal((await user('u19')).freeRunsUsed, 1)
+
+  await makePanel('p19b', 'u19', { runCounted: true, mode: 'compare', compare: { proposals: [], critic: null, judgement: null } })
+  const b = runPanelJob('p19b')
+  await until(async () => (await panel('p19b'))?.live?.agent === 'critic', 'critic to start')
+  assert.deepEqual(await stopPanel('p19b', 'u19'), { refunded: false })
+  await b
+  assert.equal((await user('u19')).freeRunsUsed, 1, 'all options were in: the run counts')
 })
 
 for (const r of results) console.log(r.join('  '))

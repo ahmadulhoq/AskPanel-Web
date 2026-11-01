@@ -1,6 +1,7 @@
 import { adminDb } from '@/lib/firebase/admin'
 import { refundRun } from '@/lib/billing/runs'
 import { firstRoundComplete } from '@/lib/agents/runState'
+import { compareRunCounts } from '@/lib/agents/compareState'
 import type { PanelDoc } from '@/types'
 import { STOPPED_MESSAGE } from './constants'
 
@@ -14,7 +15,8 @@ export class StopRejected extends Error {
 
 // Stops a queued or running debate on its owner's request. Clearing the lease makes the
 // runner's next write fail, and the runner also watches for this to abort the model call
-// in flight. A free run is refunded if stopped before round 1's verdict (spec §3.3).
+// in flight. A free run is refunded if stopped before round 1's verdict (spec §3.3), or in
+// compare mode before all the options are in.
 export async function stopPanel(panelId: string, uid: string): Promise<{ refunded: boolean }> {
   const db = adminDb()
   const ref = db.collection('panels').doc(panelId)
@@ -34,7 +36,7 @@ export async function stopPanel(panelId: string, uid: string): Promise<{ refunde
       run: null,
       live: null,
     })
-    return !firstRoundComplete(panel.rounds ?? [])
+    return panel.mode === 'compare' ? !compareRunCounts(panel.compare) : !firstRoundComplete(panel.rounds ?? [])
   })
 
   // Pro runs aren't counted, so there is nothing to give back for them.

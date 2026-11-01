@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid'
 import { adminDb } from '@/lib/firebase/admin'
 import { refundRun } from '@/lib/billing/runs'
 import { runPanel } from './orchestrator'
+import { runCompare } from './compare'
 import { generatePanelTitle } from './title'
 import type { AgentRole, PanelDoc } from '@/types'
 
@@ -59,7 +60,7 @@ export async function runPanelJob(panelId: string): Promise<void> {
     (err) => console.error('[runner] lease watch failed', panelId, err),
   )
 
-  let live: { agent: AgentRole; round: number; content: string } | null = null
+  let live: { agent: AgentRole; round: number; index?: number; content: string } | null = null
   let lastFlush = 0
   const flushLive = async (force: boolean) => {
     if (!live || lost || (!force && Date.now() - lastFlush < LIVE_FLUSH_MS)) return
@@ -68,7 +69,7 @@ export async function runPanelJob(panelId: string): Promise<void> {
   }
 
   try {
-    const run = runPanel({
+    const run = (panel.mode === 'compare' ? runCompare : runPanel)({
       panelId,
       question: panel.question,
       config: panel.config,
@@ -76,6 +77,7 @@ export async function runPanelJob(panelId: string): Promise<void> {
       context: panel.context ?? undefined,
       customPersona: panel.customPersona ?? undefined,
       rounds: panel.rounds ?? [],
+      compare: panel.compare ?? null,
       leaseId,
       signal: abort.signal,
     })
@@ -84,7 +86,7 @@ export async function runPanelJob(panelId: string): Promise<void> {
       if (lost) break
       switch (event.type) {
         case 'agent_start':
-          live = { agent: event.agent, round: event.round, content: '' }
+          live = { agent: event.agent, round: event.round, ...(event.index !== undefined ? { index: event.index } : {}), content: '' }
           await flushLive(true)
           break
         case 'agent_token':

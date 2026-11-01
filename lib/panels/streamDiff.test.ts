@@ -70,3 +70,29 @@ test('a queued panel with no progress emits nothing; an error ends the stream', 
   assert.equal(cursor.done, true)
   assert.deepEqual(diffPanel(cursor, view({ status: 'error', errorMessage: 'boom' })), [])
 })
+
+test('compare mode: stored proposals and critic replay in order, then the judge, then completion', () => {
+  const judgement = { winner: 2, scores: [{ option: 1, score: 6, summary: 'a' }, { option: 2, score: 8, summary: 'b' }], reasoning: 'r', confidence: 'high' as const }
+  const events = diffPanel(newCursor(), view({
+    mode: 'compare', status: 'complete', finalAnswer: 'Pick 2', confidence: 'high',
+    compare: { proposals: [{ content: 'P1' }, { content: 'P2' }], critic: { content: 'C' }, judgement },
+  }))
+  assert.deepEqual(events.map((e) => e.type + ('index' in e && e.index !== undefined ? `:${e.index}` : '')), [
+    'agent_start:0', 'agent_complete:0', 'agent_start:1', 'agent_complete:1', 'agent_start', 'agent_complete',
+    'synthesis_start', 'compare_result', 'panel_complete',
+  ])
+  assert.equal((events.at(-2) as { winner: number }).winner, 2)
+})
+
+test('compare mode: live proposer text streams, then completes without a second start', () => {
+  const cursor = newCursor()
+  const live = { agent: 'proposer' as const, round: 1, index: 1, content: 'Hel', runId: 'r1' }
+  const first = diffPanel(cursor, view({ mode: 'compare', compare: { proposals: [{ content: 'P1' }], critic: null, judgement: null }, live }))
+  assert.deepEqual(first.map((e) => e.type), ['agent_start', 'agent_complete', 'agent_start', 'agent_token'])
+  assert.equal((first[2] as { index?: number }).index, 1)
+  const more = diffPanel(cursor, view({ mode: 'compare', compare: { proposals: [{ content: 'P1' }], critic: null, judgement: null }, live: { ...live, content: 'Hello' } }))
+  assert.deepEqual(more, [{ type: 'agent_token', agent: 'proposer', index: 1, token: 'lo' }])
+  const done = diffPanel(cursor, view({ mode: 'compare', compare: { proposals: [{ content: 'P1' }, { content: 'Hello!' }], critic: null, judgement: null }, live: null }))
+  assert.deepEqual(done, [{ type: 'agent_complete', agent: 'proposer', round: 1, index: 1, content: 'Hello!' }])
+})
+

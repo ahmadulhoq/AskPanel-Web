@@ -29,7 +29,7 @@ export function NewConversation({ tier, initialCustomPersona }: Props) {
       const { conversationId } = await res.json()
       // The conversation page sends this first message and removes it from the URL.
       const params = new URLSearchParams({
-        q: content, mode, persona: settings.persona, rounds: String(settings.maxRounds),
+        q: content, mode, persona: settings.persona, rounds: String(settings.maxRounds), panel: settings.mode,
       })
       router.push(`/chat/${conversationId}?${params}`)
       return true

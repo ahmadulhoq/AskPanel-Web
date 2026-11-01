@@ -2,10 +2,10 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { adminDb } from '@/lib/firebase/admin'
 import { FinalAnswer } from '@/components/panel/FinalAnswer'
-import { AgentTurn } from '@/components/panel/AgentTurn'
-import { SynthesisCard } from '@/components/panel/SynthesisCard'
+import { ThreadView } from '@/components/panel/ThreadView'
 import { QuestionBubble } from '@/components/panel/QuestionBubble'
-import type { PanelDoc, AgentTurnState, SynthesisState, ConfidenceLevel, SynthesisDecision } from '@/types'
+import { stateFromPanel } from '@/lib/panels/replay'
+import type { PanelDoc } from '@/types'
 
 interface Props {
   params: Promise<{ panelId: string }>
@@ -38,29 +38,8 @@ export default async function PublicPanelPage({ params }: Props) {
   const panel = snap.data() as PanelDoc
   if (!panel.isPublic || panel.status !== 'complete') notFound()
 
-  // Reconstruct turns and syntheses from stored rounds
-  const turns: AgentTurnState[] = []
-  const syntheses: SynthesisState[] = []
-
-  for (const round of panel.rounds) {
-    if (round.respondent) {
-      turns.push({ agent: 'respondent', round: round.roundNumber, content: round.respondent.content, streaming: false })
-    }
-    if (round.critic) {
-      turns.push({ agent: 'critic', round: round.roundNumber, content: round.critic.content, streaming: false })
-    }
-    if (round.synthesizer) {
-      syntheses.push({
-        round: round.roundNumber,
-        decision: round.synthesizer.decision as SynthesisDecision,
-        confidence: round.synthesizer.confidence as ConfidenceLevel,
-        reasoning: round.synthesizer.reasoning,
-        issuesFound: round.synthesizer.issuesFound ?? 0,
-      })
-    }
-  }
-
-  const roundNumbers = [...new Set(turns.map(t => t.round))].sort((a, b) => a - b)
+  // Rebuilt the same way a live viewer's thread is: stored panel → events → state.
+  const state = stateFromPanel(panel)
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -77,35 +56,10 @@ export default async function PublicPanelPage({ params }: Props) {
         <QuestionBubble question={panel.question} />
 
         <div className="space-y-8">
-          {roundNumbers.map((round, roundIdx) => (
-            <div key={round} className="space-y-6">
-              {roundIdx > 0 && (
-                <div className="flex items-center gap-3">
-                  <div className="h-px flex-1 bg-border" />
-                  <span className="text-xs text-muted-foreground">Round {round}</span>
-                  <div className="h-px flex-1 bg-border" />
-                </div>
-              )}
-              {turns
-                .filter(t => t.round === round)
-                .map((turn, i) => {
-                  const sameSynthesis = turn.agent === 'critic'
-                    ? syntheses.find(s => s.round === round)
-                    : undefined
-                  return (
-                    <AgentTurn key={i} turn={turn} issuesFound={sameSynthesis?.issuesFound} />
-                  )
-                })}
-              {syntheses
-                .filter(s => s.round === round)
-                .map(s => (
-                  <SynthesisCard key={s.round} synthesis={s} />
-                ))}
-            </div>
-          ))}
+          <ThreadView state={state} />
 
           {panel.finalAnswer && panel.confidence && (
-            <FinalAnswer answer={panel.finalAnswer} confidence={panel.confidence as ConfidenceLevel} />
+            <FinalAnswer answer={panel.finalAnswer} confidence={panel.confidence} />
           )}
         </div>
 
