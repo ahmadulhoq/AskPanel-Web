@@ -14,6 +14,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 const FINAL_ANSWER = '## Verdict\n\nRaise a **small** round.\n\n1. Cut burn first\n2. Then raise'
 
+// Roles are told apart by the built-in system prompts; custom-persona runs would be
+// counted as 'title', so scenarios use built-in personas.
 const roleOf = (body) => {
   if (body.tools?.length) return 'synthesizer'
   const system = (body.system ?? []).map((s) => s.text ?? '').join(' ')
@@ -26,11 +28,17 @@ const roleOf = (body) => {
 const server = http.createServer(async (req, res) => {
   let raw = ''
   for await (const chunk of req) raw += chunk
-  if (req.url === '/__control') { Object.assign(ctl, JSON.parse(raw || '{}')); return res.end('{}') }
+  let body
+  try {
+    body = JSON.parse(raw || '{}')
+  } catch {
+    res.writeHead(400, { 'content-type': 'application/json' })
+    return res.end(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'body is not JSON' } }))
+  }
+  if (req.url === '/__control') { Object.assign(ctl, body); return res.end('{}') }
   if (req.url === '/__stats') { res.setHeader('content-type', 'application/json'); return res.end(JSON.stringify(calls)) }
   if (req.url === '/__reset') { for (const k in calls) calls[k] = 0; Object.assign(ctl, DEFAULTS); return res.end('{}') }
 
-  const body = JSON.parse(raw)
   const role = roleOf(body)
   calls[role]++
   if (ctl.failRole === role) {

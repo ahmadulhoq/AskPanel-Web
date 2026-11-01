@@ -3,7 +3,7 @@
 # and a real Chromium. Needs no real credentials and never calls a paid service.
 #
 #   npm run e2e                      # build + run everything
-#   E2E_SKIP_BUILD=1 npm run e2e     # reuse an existing e2e build in .next
+#   E2E_SKIP_BUILD=1 npm run e2e     # reuse the previous e2e build (.next-e2e)
 #
 # Requirements: Java 21+ (Firestore emulator), Playwright with Chromium
 # (`npm i --no-save playwright` + `npx playwright install chromium`, or a global install).

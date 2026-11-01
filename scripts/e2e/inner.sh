@@ -10,6 +10,8 @@ export E2E_OUT="${E2E_OUT:-$ROOT/e2e-results}"
 export E2E_PORT="${E2E_PORT:-3917}"
 export E2E_BASE_URL="http://localhost:$E2E_PORT"
 export FAKE_ANTHROPIC_PORT="${FAKE_ANTHROPIC_PORT:-8099}"
+# Separate build output: the e2e build bakes in placeholder NEXT_PUBLIC_* values.
+export NEXT_DIST_DIR=.next-e2e
 mkdir -p "$E2E_OUT"
 
 # Local services must bypass any outbound proxy.

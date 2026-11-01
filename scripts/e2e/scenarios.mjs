@@ -83,9 +83,12 @@ await scenario('3. runner killed mid-critic resumes at the critic, not round 1',
   await fake('/__control', { tokenDelayMs: 150 })
   await makeUser('u3', 'pro', 0); await makePanel('p3', 'u3')
   const child = spawn(process.execPath, ['--import', path.join(HERE, 'register.mjs'), path.join(HERE, 'run-one.mjs'), 'p3'], { stdio: 'ignore', env: process.env })
-  await until(async () => (await panel('p3'))?.live?.agent === 'critic', 'critic to start')
-  await sleep(700)
-  child.kill('SIGKILL')
+  try {
+    await until(async () => (await panel('p3'))?.live?.agent === 'critic', 'critic to start')
+    await sleep(700)
+  } finally {
+    child.kill('SIGKILL') // also on failure, so an orphan runner can't skew later scenarios
+  }
   const before = await panel('p3')
   const respondentText = before.rounds[0].respondent.content
   assert.equal(before.status, 'running'); assert.ok(before.run, 'dead runner left its lease')
@@ -134,7 +137,8 @@ await scenario('6. twelve simultaneous free-tier panel creations: exactly 5 are 
   await makeUser('u6', 'free', 0)
   const ref = db.collection('users').doc('u6')
   const outcomes = await Promise.all(Array.from({ length: 12 }, () =>
-    db.runTransaction((tx) => reserveRun(tx, ref, Date.now())).then(() => 'ok', (e) => (e instanceof FreeLimitReachedError ? 'limit' : 'other:' + e.message))))
+    // Extra attempts: 12-way contention on one doc can exhaust the default 5 retries.
+    db.runTransaction((tx) => reserveRun(tx, ref, Date.now()), { maxAttempts: 25 }).then(() => 'ok', (e) => (e instanceof FreeLimitReachedError ? 'limit' : 'other:' + e.message))))
   assert.equal(outcomes.filter((o) => o === 'ok').length, 5, JSON.stringify(outcomes))
   assert.equal(outcomes.filter((o) => o === 'limit').length, 7)
   assert.equal((await user('u6')).freeRunsUsed, 5)

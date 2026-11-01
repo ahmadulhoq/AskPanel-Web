@@ -39,14 +39,15 @@ const page = await ctx.newPage()
 const errors = []
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message))
-const scrollState = () => page.evaluate(() => {
+// The thread's scroll container (ThreadScroller) — the first scrolling, overflowing div.
+const onScroller = (action) => page.evaluate((action) => {
   const el = [...document.querySelectorAll('div')].find((d) => getComputedStyle(d).overflowY === 'auto' && d.scrollHeight > d.clientHeight + 20)
-  return el ? { top: el.scrollTop, max: el.scrollHeight - el.clientHeight } : null
-})
-const toTop = () => page.evaluate(() => {
-  const el = [...document.querySelectorAll('div')].find((d) => getComputedStyle(d).overflowY === 'auto' && d.scrollHeight > d.clientHeight + 20)
-  if (el) el.scrollTop = 0
-})
+  if (!el) return null
+  if (action === 'top') el.scrollTop = 0
+  return { top: el.scrollTop, max: el.scrollHeight - el.clientHeight }
+}, action)
+const scrollState = () => onScroller('read')
+const toTop = () => onScroller('top')
 
 try {
   // ── v1 panel flow: streaming markdown + scroll-follow ─────────────────
@@ -125,8 +126,8 @@ try {
   const bubbles = await page.locator('text=Should we launch on Product Hunt or Hacker News first?').count()
   check('conversation persists across reloads', bubbles === 1 && await page.locator('h2', { hasText: 'reply view' }).count() === 1)
   await page.getByRole('button', { name: 'Show debate' }).first().click()
-  await page.getByText('Respondent', { exact: true }).first().waitFor({ timeout: 15000 })
-  check('a finished debate expands to its full transcript', true)
+  const expanded = await page.getByText('Respondent', { exact: true }).first().waitFor({ timeout: 15000 }).then(() => true, () => false)
+  check('a finished debate expands to its full transcript', expanded && await page.getByText('critic view').count() >= 1)
   await page.screenshot({ path: `${SHOTS}/6-chat-after-return.png` })
 
   await page.setViewportSize({ width: 390, height: 844 })

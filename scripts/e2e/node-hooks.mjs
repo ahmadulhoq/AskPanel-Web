@@ -9,7 +9,7 @@ const ROOT_URL = pathToFileURL(ROOT).href
 
 const tryFile = (base) => {
   if (existsSync(base) && statSync(base).isFile()) return base
-  for (const ext of ['.ts', '.tsx', '/index.ts']) if (existsSync(base + ext)) return base + ext
+  for (const ext of ['.ts', '/index.ts']) if (existsSync(base + ext)) return base + ext
   return null
 }
 
