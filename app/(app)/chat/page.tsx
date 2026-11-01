@@ -17,6 +17,10 @@ export default async function ChatListPage() {
   const user = await getSessionUser()
   if (!user) redirect('/login')
 
+  const userData = (await adminDb().collection('users').doc(user.uid).get()).data()
+  const tier = (userData?.subscription?.tier ?? 'free') as 'free' | 'pro'
+  const customPersona = userData?.customPersona ?? null
+
   const snap = await adminDb()
     .collection('conversations')
     .where('userId', '==', user.uid)
@@ -42,7 +46,7 @@ export default async function ChatListPage() {
       </div>
 
       <section className="mb-10">
-        <NewConversation />
+        <NewConversation tier={tier} initialCustomPersona={customPersona} />
       </section>
 
       {conversations.length > 0 && (

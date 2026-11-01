@@ -5,6 +5,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { createPanel } from '@/lib/panels/create'
 import { FreeLimitReachedError } from '@/lib/billing/runs'
 import { debateContext } from '@/lib/conversations/context'
+import { sanitizeDebateSettings } from '@/lib/conversations/settings'
 import {
   conversationRef, getOwnedConversation, loadMessages, messagesRef, nextSeq, toMessageView,
 } from '@/lib/conversations/store'
@@ -17,7 +18,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  if (!(await getOwnedConversation(cid, user.uid))) {
+  const conversation = await getOwnedConversation(cid, user.uid)
+  if (!conversation) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
@@ -34,6 +36,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'Give the panel a bit more to debate (at least 10 characters).' }, { status: 400 })
   }
 
+  const debateSettings = sanitizeDebateSettings(body.settings)
+  const settingsUpdate = body.settings ? { debateSettings } : {}
   const assistantRef = messagesRef(cid).doc()
   let panelId: string
   try {
@@ -41,7 +45,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       uid: user.uid,
       question,
       isPublic: false,
-      userContext: debateContext(history.slice(0, questionIndex)),
+      persona: debateSettings.persona,
+      maxRounds: debateSettings.maxRounds,
+      userContext: debateContext(
+        history.slice(0, questionIndex).filter((m) => m.seq > (conversation.summarizedThroughSeq ?? 0)),
+        undefined,
+        conversation.summary ?? null,
+      ),
       conversationId: cid,
       messageId: assistantRef.id,
     })
@@ -57,7 +67,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   const batch = adminDb().batch()
   batch.set(assistantRef, { ...message, createdAt: FieldValue.serverTimestamp() })
-  batch.update(conversationRef(cid), { updatedAt: FieldValue.serverTimestamp() })
+  batch.update(conversationRef(cid), { updatedAt: FieldValue.serverTimestamp(), ...settingsUpdate })
   await batch.commit()
 
   return NextResponse.json({

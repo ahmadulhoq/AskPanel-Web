@@ -114,6 +114,14 @@ try {
   await page.screenshot({ path: `${SHOTS}/5-chat-debate-verdict.png` })
   check('"Debate this" runs the panel inline and shows the verdict', await page.getByText('Panel verdict').count() >= 1)
 
+  // Debate settings: pick 1 round for the next debate (remembered on the conversation).
+  await page.getByTitle('Debate panel settings').click()
+  await page.getByRole('button', { name: '1 round', exact: true }).click()
+  check('debate settings chip shows the chosen rounds', /General · 1 round$/.test(await page.getByTitle('Debate panel settings').innerText()))
+  await page.waitForTimeout(300) // let the button colour transition finish
+  await page.screenshot({ path: `${SHOTS}/5b-chat-debate-settings.png` })
+  await page.getByTitle('Debate panel settings').click()
+
   await page.locator('textarea').fill('Should we launch on Product Hunt or Hacker News first?')
   await page.getByRole('button', { name: 'Debate', exact: true }).click()
   await page.getByText('Panel deliberating…').waitFor({ timeout: 15000 })
@@ -123,6 +131,8 @@ try {
   await page.getByText('Panel verdict').nth(1).waitFor({ timeout: 30000 }).catch(() => {})
   const verdicts = await page.getByText('Panel verdict').count()
   check('a debate finishes while nobody is watching', verdicts === 2, `verdict blocks after returning: ${verdicts}`)
+  const chip = await page.getByTitle('Debate panel settings').innerText()
+  check('debate settings are remembered by the conversation', /1 round$/.test(chip), chip)
   const bubbles = await page.locator('text=Should we launch on Product Hunt or Hacker News first?').count()
   check('conversation persists across reloads', bubbles === 1 && await page.locator('h2', { hasText: 'reply view' }).count() === 1)
   await page.getByRole('button', { name: 'Show debate' }).first().click()
@@ -130,9 +140,20 @@ try {
   check('a finished debate expands to its full transcript', expanded && await page.getByText('critic view').count() >= 1)
   await page.screenshot({ path: `${SHOTS}/6-chat-after-return.png` })
 
+  // Stop a running debate.
+  await fake('/__control', { tokenDelayMs: 150 })
+  await page.locator('textarea').fill('Should we hire a head of sales before product-market fit?')
+  await page.getByRole('button', { name: 'Debate', exact: true }).click()
+  await page.getByText('Panel deliberating…').waitFor({ timeout: 15000 })
+  await page.getByText('Respondent', { exact: true }).last().waitFor({ timeout: 15000 })
+  await page.getByRole('button', { name: 'Stop', exact: true }).click()
+  const stopped = await page.getByText('Debate stopped').waitFor({ timeout: 10000 }).then(() => true, () => false)
+  check('Stop ends a running debate and says so', stopped && await page.getByText('You stopped this debate.').count() >= 1)
+  await page.screenshot({ path: `${SHOTS}/7-chat-stopped.png` })
+
   await page.setViewportSize({ width: 390, height: 844 })
   await page.waitForTimeout(500)
-  await page.screenshot({ path: `${SHOTS}/7-chat-mobile.png` })
+  await page.screenshot({ path: `${SHOTS}/8-chat-mobile.png` })
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)
   check('no horizontal overflow at phone width', !overflow)
 } catch (e) {

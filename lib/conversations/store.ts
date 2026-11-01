@@ -45,7 +45,7 @@ export async function loadMessages(cid: string, limit = 200): Promise<MessageVie
   return docs.map(({ id, data }) => {
     const panel = data.panelId ? panels.get(data.panelId) : undefined
     const debate = panel
-      ? { status: panel.status, finalAnswer: panel.finalAnswer, confidence: panel.confidence }
+      ? { status: panel.status, finalAnswer: panel.finalAnswer, confidence: panel.confidence, stopped: !!panel.stoppedAt }
       : null
     return toMessageView(id, data, debate)
   })

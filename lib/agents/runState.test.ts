@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { resumePoint, historyBefore } from './runState.ts'
+import { resumePoint, historyBefore, firstRoundComplete } from './runState.ts'
 import type { PanelRound, RoundSynthesis } from '@/types'
 
 const synth = (decision: RoundSynthesis['decision']): RoundSynthesis =>
@@ -65,4 +65,10 @@ test('history keeps earlier rounds in order regardless of storage order', () => 
     historyBefore(rounds, point).map(t => `${t.role}${t.round}`),
     ['respondent1', 'critic1', 'synthesizer1', 'respondent2'],
   )
+})
+
+test('firstRoundComplete: only a stored round-1 verdict counts', () => {
+  assert.equal(firstRoundComplete([]), false)
+  assert.equal(firstRoundComplete([round(1, { respondent: { content: 'r' }, critic: { content: 'c' } })]), false)
+  assert.equal(firstRoundComplete([round(1, { respondent: { content: 'r' }, critic: { content: 'c' }, synthesizer: synth('continue') })]), true)
 })

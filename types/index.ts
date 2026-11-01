@@ -76,6 +76,8 @@ export interface PanelDoc {
   live?: LiveTurn | null
   run?: RunLease | null
   runCounted?: boolean
+  // Set when the owner pressed Stop (status is then 'error').
+  stoppedAt?: number | null
 }
 
 // In-progress agent text, flushed by the runner about once a second.
@@ -98,6 +100,16 @@ export interface ConversationDoc {
   title: string | null
   createdAt: Timestamp
   updatedAt: Timestamp
+  // Rolling summary of messages that no longer fit in the reply window (seq <= summarizedThroughSeq).
+  summary?: string | null
+  summarizedThroughSeq?: number
+  // Persona and rounds of the last debate started here; the composer reopens with them.
+  debateSettings?: DebateSettings
+}
+
+export interface DebateSettings {
+  persona: string
+  maxRounds: number
 }
 
 export type MessageKind = 'text' | 'debate'
@@ -124,7 +136,7 @@ export interface MessageView {
   status: MessageStatus
   seq: number
   panelId: string | null
-  debate: { status: PanelStatus; finalAnswer: string | null; confidence: ConfidenceLevel | null } | null
+  debate: { status: PanelStatus; finalAnswer: string | null; confidence: ConfidenceLevel | null; stopped?: boolean } | null
 }
 
 // Events streamed by POST /api/conversations/[cid]/messages for a quick reply.

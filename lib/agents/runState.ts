@@ -44,3 +44,7 @@ export function historyBefore(rounds: PanelRound[], point: ResumePoint): Convers
   }
   return history
 }
+
+// Whether round 1 has its verdict. A free run stopped before this point is refunded (spec §3.3).
+export const firstRoundComplete = (rounds: PanelRound[]) =>
+  rounds.some(r => r.roundNumber === 1 && !!r.synthesizer)

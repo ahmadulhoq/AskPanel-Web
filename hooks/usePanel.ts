@@ -68,7 +68,9 @@ function reducer(state: PanelState, action: Action): PanelState {
     }
 
     case 'error': {
-      return { ...state, status: 'error', errorMessage: action.message }
+      // A stopped or failed run leaves its unfinished turn as it was, not "still typing".
+      const turns = state.turns.map((t) => (t.streaming ? { ...t, streaming: false } : t))
+      return { ...state, status: 'error', errorMessage: action.message, turns }
     }
 
     default:
