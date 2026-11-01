@@ -24,3 +24,5 @@
 - `POST /api/panels` is the only place `maxRounds` is validated server-side — client-sent `maxRounds` is never trusted directly (clamped to tier limit inside the transaction). Confirmed correct: free tier cannot request 3 rounds even by crafting the request body directly.
 - `GET /api/panels/[panelId]/stream` reads `panelData.customPersona ?? undefined` and passes it straight to `runPanel()` — depends on `POST /api/panels` having already resolved and copied it at creation time (see lib-agents notes / orchestrator `customPersona` param).
 - Retry route clears `rounds: []` — a retry always starts the panel over from round 1, it does not resume from wherever it errored. This is a product decision, not a bug (an error mid-round means agent output for that round may be incomplete/untrustworthy).
+- 2026-11-01 (BL-048): `POST /api/panels/[panelId]/stop` → `stopPanel()` (401/404/409, `{ ok, refunded }`). Retry also clears `stoppedAt`.
+

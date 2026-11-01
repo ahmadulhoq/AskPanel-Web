@@ -9,3 +9,5 @@
 ## Notes
 - Debates started from a conversation are `isPublic: false` (sharing for conversations is an open decision, spec §13.4).
 - All of it is verified end to end in a browser (see RULES.md "End-to-end verification").
+- 2026-11-01 (BL-048): both routes accept `settings: { persona, maxRounds }` (sanitized; stored as `conversation.debateSettings` when sent) and pass them to `createPanel`. Replies load `REPLY_LOAD_MESSAGES` (80), send `replyHistory()` + the rolling summary, and call `updateSummary()` after the reply is saved. "Debate this" uses the summary only when the debated question is newer than it (otherwise the summary would describe later turns).
+

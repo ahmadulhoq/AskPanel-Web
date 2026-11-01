@@ -80,6 +80,9 @@
 - Debate (Debate button): `POST …/messages {mode:'debate'}` → `createPanel()` with `debateContext(history)` → runner starts immediately → assistant `kind:'debate'` message → `DebateBlock` renders `PanelThread` live
 - Debate this: `POST …/debates {messageId}` → debates the user message that reply answered, with the conversation before it as context
 - Later replies see finished debates as `[Panel verdict — …]` turns (read live from the panel docs by `loadMessages`)
+- Debate settings: chip in the composer → persona + rounds, sent with Debate / Debate this, remembered on the conversation (`debateSettings`)
+- Rolling summary (2026-11-01): after each reply, messages that left the window (last 60 within 24k chars) are folded into `conversation.summary` once ≥3k chars or ≥8 messages are waiting; until then they stay in the reply as slack. Replies = summary + unsummarized messages
+- Stop: `POST /api/panels/[id]/stop` → panel `error` + `stoppedAt`, lease cleared → the runner's lease watch aborts the in-flight model call (streaming or Synthesizer) within ~1s. Free run refunded only before round 1's verdict
 
 ### Custom Persona
 - Save: `CustomPersonaEditor` → `PUT /api/user/persona` (Pro-gated) → stored as `UserDoc.customPersona`

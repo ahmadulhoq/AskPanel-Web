@@ -9,3 +9,11 @@
 | `NewConversation` | NewConversation.tsx | /chat composer: creates a conversation, navigates to `/chat/[cid]?q=…&mode=…` |
 
 Pages: `app/(app)/chat/page.tsx` (list + new), `app/(app)/chat/[cid]/page.tsx` (server-loads messages, passes `pending` only for an empty conversation). Helper: `lib/sse/parse.ts` `drainSSE()` (tested).
+
+2026-11-01 (BL-048):
+- `ChatComposer` takes `settings?: { label, panel }` — a "General · 2 rounds" chip in the toolbar toggles the panel above the input.
+- `DebateSettingsPanel` (DebateSettingsPanel.tsx): PersonaSelector + RoundsSelector for chat debates; `debateSettingsLabel(value, customPersona)` builds the chip text.
+- `ConversationView` takes `tier`, `initialCustomPersona`, `initialSettings`; sends `settings` with messages and "Debate this". The page derives settings from the URL (first message from /chat) or `conversation.debateSettings`.
+- `NewConversation` takes `tier`, `initialCustomPersona`; passes `persona` and `rounds` in the URL with the first message.
+- `DebateBlock`: header Stop button while running (`StopButton`; 409 → opens the thread to show the real outcome); `failure` state 'stopped' | 'failed' from the initial view (`debate.stopped`) or live via `PanelThread onError`; labels "Debate stopped" / "Panel debate failed".
+

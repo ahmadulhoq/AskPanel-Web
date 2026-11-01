@@ -1,5 +1,12 @@
 # Agent Changelog: askpanel-web
 
+## 2026-11-01 — BL-048: chat debate settings, Stop, rolling summary (PR #4)
+
+- Persona/rounds for chat debates (composer chip + panel; remembered per conversation). Stop (route, runner lease watch + AbortSignal through the orchestrator so even the Synthesizer call is cancelled; refund only before round 1's verdict). Rolling summary (in-memory backlog after each reply; summary not counted against the reply budget; unsummarized slack stays visible).
+- Found and fixed: Pro-only personas were enforced only in the UI — `createPanel` now falls back to General for free users.
+- Self-review found 10 issues, all fixed: stoppedAt not cleared on retry; local "Connection lost" marked debates failed; 409 Stop labelled finished debates "stopped"; `refunded` true for Pro; Synthesizer call not aborted; summarizer re-read 200 messages per reply; messages invisible between leaving the window and being summarized; summary-length window mismatch; "Debate this" on an old reply leaked later turns via the summary; sequential reads on /chat.
+- e2e: 12 runner scenarios, 17 browser checks; unit tests 35.
+
 ## 2026-11-01 — BL-038: CI, e2e suite in the repo, lint, paywall wording (PR #3)
 
 - Git flow changed at the user's request: PR per piece of work, self-review, CI green, merge. PR #3 merged as `8590093` (merge commit — keeps two superseded 2026-05-31 docs commits from the session branch in history without reapplying them).

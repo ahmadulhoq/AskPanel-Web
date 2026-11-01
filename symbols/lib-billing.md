@@ -7,7 +7,7 @@
 | `FREE_RUN_LIMIT` (const) | runs.ts | 5 per 30-day window |
 | `FreeLimitReachedError` (class) | runs.ts | Thrown by `reserveRun` at the limit; routes map it to 402 |
 | `reserveRun(tx, userRef, now)` | runs.ts | Inside the caller's transaction: reads the user (must be the transaction's first read of that doc), applies the monthly reset, enforces the limit, increments `freeRunsUsed`. Returns `{ tier, counted, userData }`. Pro: no count. Used by `POST /api/panels` and the retry route. |
-| `refundRun(panelId)` | runs.ts | Transaction: if `panel.runCounted`, decrement the owner's `freeRunsUsed` (floor 0) and clear `runCounted`. Idempotent. Called by `runPanelJob` on error. |
+| `refundRun(panelId)` | runs.ts | Transaction: if `panel.runCounted`, decrement the owner's `freeRunsUsed` (floor 0) and clear `runCounted`. Idempotent. Returns whether a run was given back. Called by `runPanelJob` on error and by `stopPanel`. |
 
 | `subscriptionFields(sub)` | subscription.ts | Pure (tested). Stripe subscription → `{ tier, status, subscriptionId, customerId, currentPeriodEndMs, cancelAtPeriodEnd }`. Pro for active/trialing/past_due (past_due = grace while Stripe retries); free otherwise. Period end read from `items.data[0]` (this API version). |
 | `shouldApply(currentSubId, incoming)` | subscription.ts | Pure (tested). Ignores events about an older subscription unless the incoming one is paying (out-of-order safety). |
