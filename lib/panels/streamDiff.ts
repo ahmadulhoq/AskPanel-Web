@@ -1,11 +1,12 @@
 import type { AgentRole, PanelDoc, SSEEvent } from '@/types'
 
 export type PanelView = Pick<PanelDoc, 'status' | 'rounds' | 'finalAnswer' | 'confidence' | 'errorMessage' | 'live'>
+  & Partial<Pick<PanelDoc, 'mode' | 'compare'>>
 
 // What this stream has already told its client.
 export interface StreamCursor {
   emitted: Set<string>
-  live: { agent: AgentRole; round: number; runId: string; sent: number } | null
+  live: { agent: AgentRole; round: number; index?: number; runId: string; sent: number } | null
   done: boolean
 }
 
@@ -15,6 +16,7 @@ export const newCursor = (): StreamCursor => ({ emitted: new Set(), live: null, 
 // The event shapes are the same ones the orchestrator used to stream directly.
 export function diffPanel(cursor: StreamCursor, panel: PanelView): SSEEvent[] {
   if (cursor.done) return []
+  if (panel.mode === 'compare') return diffCompare(cursor, panel)
   const events: SSEEvent[] = []
   const rounds = [...(panel.rounds ?? [])].sort((a, b) => a.roundNumber - b.roundNumber)
 
@@ -62,6 +64,10 @@ export function diffPanel(cursor: StreamCursor, panel: PanelView): SSEEvent[] {
     }
   }
 
+  return finish(cursor, panel, events)
+}
+
+function finish(cursor: StreamCursor, panel: PanelView, events: SSEEvent[]): SSEEvent[] {
   if (panel.status === 'complete' && panel.finalAnswer && panel.confidence) {
     events.push({ type: 'panel_complete', finalAnswer: panel.finalAnswer, confidence: panel.confidence })
     cursor.done = true
@@ -70,4 +76,51 @@ export function diffPanel(cursor: StreamCursor, panel: PanelView): SSEEvent[] {
     cursor.done = true
   }
   return events
+}
+
+// Compare mode: proposers (keyed by index), the critic, then the judge's result. All in
+// round 1, so the client's thread shows them as one round.
+const compareKey = (agent: AgentRole, index?: number) => (agent === 'proposer' ? `p${index}` : agent)
+
+function diffCompare(cursor: StreamCursor, panel: PanelView): SSEEvent[] {
+  const events: SSEEvent[] = []
+  const compare = panel.compare
+  const steps = [
+    ...(compare?.proposals ?? []).map((p, index) => ({ agent: 'proposer' as const, index, content: p.content })),
+    ...(compare?.critic ? [{ agent: 'critic' as const, index: undefined, content: compare.critic.content }] : []),
+  ]
+  for (const step of steps) {
+    const key = compareKey(step.agent, step.index)
+    if (cursor.emitted.has(key)) continue
+    const wasLive = cursor.live?.agent === step.agent && cursor.live.index === step.index
+    const at = step.index !== undefined ? { index: step.index } : {}
+    if (!wasLive) events.push({ type: 'agent_start', agent: step.agent, round: 1, ...at })
+    events.push({ type: 'agent_complete', agent: step.agent, round: 1, ...at, content: step.content })
+    cursor.emitted.add(key)
+    if (wasLive) cursor.live = null
+  }
+
+  const judgement = compare?.judgement
+  if (judgement && !cursor.emitted.has('judge')) {
+    events.push({ type: 'synthesis_start', round: 1 })
+    events.push({ type: 'compare_result', ...judgement })
+    cursor.emitted.add('judge')
+  }
+
+  const live = panel.live
+  if (live && panel.status === 'running' && !cursor.emitted.has(compareKey(live.agent, live.index))) {
+    const same = cursor.live?.agent === live.agent && cursor.live.index === live.index
+    const restarted = same && (cursor.live!.runId !== live.runId || live.content.length < cursor.live!.sent)
+    if (!same || restarted) {
+      const at = live.index !== undefined ? { index: live.index } : {}
+      events.push({ type: 'agent_start', agent: live.agent, round: 1, ...at })
+      cursor.live = { agent: live.agent, round: 1, ...at, runId: live.runId, sent: 0 }
+    }
+    const c = cursor.live!
+    if (live.content.length > c.sent) {
+      events.push({ type: 'agent_token', agent: live.agent, token: live.content.slice(c.sent) })
+      c.sent = live.content.length
+    }
+  }
+  return finish(cursor, panel, events)
 }

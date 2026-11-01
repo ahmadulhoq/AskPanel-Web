@@ -1,7 +1,28 @@
 import { type NextRequest } from 'next/server'
 import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
+import { optionName } from '@/lib/agents/compareState'
 import type { PanelDoc } from '@/types'
+
+// Compare mode: the options, the critique, and the judge's scores.
+function compareLines(panel: PanelDoc): string[] {
+  const c = panel.compare
+  if (!c) return []
+  const lines: string[] = []
+  c.proposals.forEach((p, i) => {
+    lines.push(`## Option ${i + 1}${c.judgement?.winner === i + 1 ? ' (winner)' : ''}`, '', p.content, '')
+  })
+  if (c.critic) lines.push('## Critic', '', c.critic.content, '')
+  if (c.judgement) {
+    lines.push('## Judge', '')
+    for (const s of c.judgement.scores) {
+      const name = optionName(c.proposals[s.option - 1]?.content ?? '', `Option ${s.option}`)
+      lines.push(`- **Option ${s.option} — ${name}:** ${s.score}/10. ${s.summary}`)
+    }
+    lines.push('', c.judgement.reasoning, '')
+  }
+  return lines
+}
 
 function formatMarkdown(panel: PanelDoc, panelId: string): string {
   const lines: string[] = []
@@ -18,11 +39,14 @@ function formatMarkdown(panel: PanelDoc, panelId: string): string {
     lines.push(`**Question:** ${panel.question}`)
   }
   lines.push(`**Persona:** ${panel.persona ?? 'general'}`)
+  if (panel.mode === 'compare') lines.push('**Mode:** compare options')
   lines.push(`**Date:** ${date}`)
   lines.push(`**Confidence:** ${panel.confidence ?? 'unknown'}`)
   lines.push('')
   lines.push('---')
   lines.push('')
+
+  lines.push(...compareLines(panel))
 
   const rounds = panel.rounds ?? []
   for (let i = 0; i < rounds.length; i++) {

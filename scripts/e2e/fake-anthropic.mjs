@@ -9,7 +9,7 @@ import http from 'node:http'
 const PORT = Number(process.env.FAKE_ANTHROPIC_PORT ?? 8099)
 const DEFAULTS = { tokenDelayMs: 40, synthDelayMs: 0, failRole: null, decision: 'consensus' }
 const ctl = { ...DEFAULTS }
-const calls = { respondent: 0, critic: 0, synthesizer: 0, title: 0, reply: 0, summary: 0 }
+const calls = { respondent: 0, critic: 0, synthesizer: 0, title: 0, reply: 0, summary: 0, proposer: 0, judge: 0 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 const FINAL_ANSWER = '## Verdict\n\nRaise a **small** round.\n\n1. Cut burn first\n2. Then raise'
@@ -17,10 +17,12 @@ const FINAL_ANSWER = '## Verdict\n\nRaise a **small** round.\n\n1. Cut burn firs
 // Roles are told apart by the built-in system prompts; custom-persona runs would be
 // counted as 'title', so scenarios use built-in personas.
 const roleOf = (body) => {
+  if (body.tools?.[0]?.name === 'judge_options') return 'judge'
   if (body.tools?.length) return 'synthesizer'
   const system = (body.system ?? []).map((s) => s.text ?? '').join(' ')
   if (/Critic in a/.test(system)) return 'critic'
   if (/Respondent in a/.test(system)) return 'respondent'
+  if (/Proposer in a/.test(system)) return 'proposer'
   if (/running summary/.test(system)) return 'summary'
   if (/AskPanel's assistant/.test(system)) return 'reply'
   return 'title'
@@ -48,6 +50,17 @@ const server = http.createServer(async (req, res) => {
   }
   const msg = { id: 'msg_' + Date.now(), type: 'message', role: 'assistant', model: body.model, stop_sequence: null, usage: { input_tokens: 5, output_tokens: 5 } }
 
+  if (role === 'judge') {
+    res.setHeader('content-type', 'application/json')
+    return res.end(JSON.stringify({
+      ...msg, stop_reason: 'tool_use',
+      content: [{ type: 'tool_use', id: 'toolu_2', name: 'judge_options', input: {
+        winner: 2, confidence: 'high', reasoning: 'Plan B balances runway and growth.',
+        scores: [1, 2, 3].map((option) => ({ option, score: option === 2 ? 8 : 5, summary: `Score for option ${option}.` })),
+        finalAnswer: '## Go with Plan B\n\nIt wins on runway. Plan A lost on risk; Plan C lost on speed.',
+      } }],
+    }))
+  }
   if (role === 'synthesizer') {
     await sleep(ctl.synthDelayMs)
     res.setHeader('content-type', 'application/json')
@@ -67,7 +80,8 @@ const server = http.createServer(async (req, res) => {
   ev('message_start', { message: { ...msg, content: [], stop_reason: null } })
   ev('content_block_start', { index: 0, content_block: { type: 'text', text: '' } })
   // Markdown split into small tokens, so rendering of partial markdown is exercised.
-  const md = `## ${role} view\n\nHere is the **key point** for this ${role} turn.\n\n- First consideration with detail\n- Second consideration\n- Third one\n\n| Option | Cost |\n|---|---|\n| A | Low |\n| B | High |\n\nClosing sentence from the ${role}.`
+  const heading = role === 'proposer' ? `### Plan ${'ABCDEFGH'[(calls.proposer - 1) % 8]}\n\n` : ''
+  const md = `${heading}## ${role} view\n\nHere is the **key point** for this ${role} turn.\n\n- First consideration with detail\n- Second consideration\n- Third one\n\n| Option | Cost |\n|---|---|\n| A | Low |\n| B | High |\n\nClosing sentence from the ${role}.`
   for (const token of md.match(/.{1,6}/gs)) {
     ev('content_block_delta', { index: 0, delta: { type: 'text_delta', text: token } })
     await sleep(ctl.tokenDelayMs)

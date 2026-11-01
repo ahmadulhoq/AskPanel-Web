@@ -61,6 +61,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       isPublic: false,
       persona: debateSettings.persona,
       maxRounds: debateSettings.maxRounds,
+      mode: debateSettings.mode,
       userContext: briefBefore(history, questionIndex, conversation),
       conversationId: cid,
       messageId: assistantRef.id,

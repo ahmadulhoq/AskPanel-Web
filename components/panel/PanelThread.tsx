@@ -2,8 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { usePanel, CONNECTION_LOST_MESSAGE } from '@/hooks/usePanel'
-import { AgentTurn } from './AgentTurn'
-import { SynthesisCard } from './SynthesisCard'
+import { ThreadView } from './ThreadView'
 import { FinalAnswer } from './FinalAnswer'
 import { FollowUpComposer } from './FollowUpComposer'
 import { RetryButton } from './RetryButton'
@@ -45,47 +44,9 @@ export function PanelThread({
     return <PanelSkeleton />
   }
 
-  const roundNumbers = [...new Set([
-    ...state.turns.map(t => t.round),
-    ...state.syntheses.map(s => s.round),
-  ])].sort((a, b) => a - b)
-
   return (
     <div className="space-y-8">
-      {roundNumbers.map((round, roundIdx) => (
-        <div key={round} className="space-y-6">
-          {roundIdx > 0 && (
-            <div className="flex items-center gap-3">
-              <div className="h-px flex-1 bg-border" />
-              <span className="text-xs text-muted-foreground">Round {round}</span>
-              <div className="h-px flex-1 bg-border" />
-            </div>
-          )}
-          {state.turns
-            .filter(t => t.round === round)
-            .map((turn, i) => {
-              // For the Critic, issuesFound comes from the same-round Synthesizer.
-              // It's null during a live run (synthesis hasn't fired yet) and
-              // appears once synthesis_result arrives, retroactively tagging
-              // the completed Critic turn.
-              const sameSynthesis = turn.agent === 'critic'
-                ? state.syntheses.find(s => s.round === round)
-                : undefined
-              return (
-                <AgentTurn
-                  key={`${turn.agent}-${round}-${i}`}
-                  turn={turn}
-                  issuesFound={sameSynthesis?.issuesFound}
-                />
-              )
-            })}
-          {state.syntheses
-            .filter(s => s.round === round)
-            .map(s => (
-              <SynthesisCard key={`synth-${round}`} synthesis={s} />
-            ))}
-        </div>
-      ))}
+      <ThreadView state={state} />
 
       {canStop && state.status === 'running' && (
         <div className="flex justify-center">

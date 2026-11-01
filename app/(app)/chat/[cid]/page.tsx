@@ -10,7 +10,7 @@ import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton'
 
 interface Props {
   params: Promise<{ cid: string }>
-  searchParams: Promise<{ q?: string; mode?: string; persona?: string; rounds?: string }>
+  searchParams: Promise<{ q?: string; mode?: string; persona?: string; rounds?: string; panel?: string }>
 }
 
 export const metadata = { title: 'Chat — AskPanel' }
@@ -30,14 +30,14 @@ export default async function ConversationPage({ params, searchParams }: Props) 
   const userData = userSnap.data()
   const tier = (userData?.subscription?.tier ?? 'free') as 'free' | 'pro'
 
-  const { q, mode, persona, rounds } = await searchParams
+  const { q, mode, persona, rounds, panel } = await searchParams
   // Only a brand-new conversation accepts a first message (and its settings) from the URL.
   const fresh = !!q && messages.length === 0
   const pending = fresh
     ? { content: q.slice(0, 4000), mode: mode === 'debate' ? ('debate' as const) : ('reply' as const) }
     : null
   const settings = fresh && persona
-    ? sanitizeDebateSettings({ persona, maxRounds: Number(rounds) })
+    ? sanitizeDebateSettings({ persona, maxRounds: Number(rounds), mode: panel })
     : conversation.debateSettings ? sanitizeDebateSettings(conversation.debateSettings) : DEFAULT_DEBATE_SETTINGS
 
   return (
