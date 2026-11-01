@@ -14,3 +14,4 @@
 | BL-036 | Stripe subscription sync + account states | 2026-10-31 | ~1d | 2026-10-31T00:00Z | 2026-10-31T00:00Z | ~20 min | 7 | completed |
 | BL-039 | Streamdown + stick-to-bottom | 2026-10-31 | ~0.5d | 2026-10-31T00:00Z | 2026-10-31T00:00Z | ~20 min | 8 | completed |
 | BL-041 | v2 M1 conversations (backend + UI) + browser e2e + font fix | 2026-10-31 | ~2w | 2026-10-31T00:00Z | 2026-10-31T00:00Z | ~3h | 30 | completed |
+| BL-038 | CI workflow, e2e suite in repo, lint fixes, paywall wording (PR #3) | 2026-11-01 | ~1d | 2026-11-01T04:20Z | 2026-11-01T04:55Z | ~35 min | 23 (8 new e2e/CI files, 15 edited) | completed |

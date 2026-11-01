@@ -1,5 +1,3 @@
-> **Mirror of the project-root `BACKLOG.md`, which is canonical.** Re-sync this copy at task-completion; do not edit it independently.
-
 # Backlog — AskPanel
 
 > Managed by AI Agent. Updated at task-completion. Line count checked at session start.
@@ -15,7 +13,6 @@
 | BL-003 | P1 | Set up Stripe webhook endpoint in production | 2026-05-24 | | After live URL known: add the endpoint `/api/stripe/webhook` in Stripe with events `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`; set `stripe-webhook-secret` in Secret Manager. Test with `stripe trigger` (renewal, failed payment, cancel at period end) |
 | BL-035 | P1 | Decide the Pro run cap | 2026-10-30 | | Upgrade dialog promises "100 panel runs / month"; code gives Pro unlimited runs. Either enforce a cap or fix the copy (audit #5). Needs a pricing decision — see v2 spec §8, §13 |
 | BL-037 | P1 | Decide `cpuAlwaysAllocated` | 2026-10-31 | | On (current): debates finish while users are away; CPU billed for instance lifetime. Off: cheaper; unwatched debates pause and resume on return. v2 spec §13.5 |
-| BL-038 | P2 | Lint, CI, e2e harness, and paywall title | 2026-10-30 | | `npm run lint` fails (2 pre-existing errors). No CI — add lint + `npm test` + build on push. Commit the browser e2e harness (emulators + fake model API + Playwright, recipe in `.memory/RULES.md`) so it can run in CI. Paywall dialog always says "You've used your 5 free panel runs" even when opened from a locked Pro feature (audit #9) |
 | BL-040 | P2 | Launch basics | 2026-10-30 | | Privacy policy + terms pages, account deletion, panel deletion, dashboard access beyond the latest 20 panels, rate limiting |
 | BL-047 | P1 | Decide quick-reply limits and model | 2026-10-31 | | Free users get 30 quick replies/day — a placeholder (`lib/billing/replies.ts`). Also whether replies use Sonnet 5.5 (current) or a cheaper model. v2 spec §13.1–13.2 |
 | BL-048 | P2 | v2 M1 follow-ups | 2026-10-31 | | Not in M1: persona and rounds choice for debates started in chat (uses General, 2 rounds); Stop button for a running debate (spec §3.3); rolling summary for long conversations (spec §5 — replies currently see the last ~24k chars); conversation sharing (spec §13.4 — chat debates are private) |
@@ -31,8 +28,8 @@
 
 | ID | Title | Completed |
 |----|-------|-----------|
+| BL-038 | CI (lint, unit, build, e2e on every PR), e2e suite committed (`npm run e2e`), lint clean, paywall says "Pro feature" for locked controls | 2026-11-01 |
 | BL-046 | App rendered in the browser's default serif: fixed self-referential `--font-sans` (now Geist) | 2026-10-31 |
 | BL-041 | v2 M1: conversations at /chat (beta) — quick replies, Debate button, "Debate this", inline live debates; verified in a browser | 2026-10-31 |
 | BL-039 | Streaming UI: Streamdown (styled markdown — `prose` had been a no-op) + scroll that stops following when you scroll up | 2026-10-31 |
 | BL-036 | Stripe: renewals, failed payments, scheduled cancellations synced (order-proof); /account shows them | 2026-10-31 |
-| BL-034 | Persona picked after typing is now actually used | 2026-10-31 |

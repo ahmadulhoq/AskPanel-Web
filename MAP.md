@@ -1,5 +1,5 @@
 # Project Map: askpanel-web
-> Last updated: 2026-10-31 (background runs, billing, rules lockdown)
+> Last updated: 2026-11-01 (CI + e2e suite; PR-based git flow)
 
 ## Architecture Pattern
 - Pattern: Next.js 16 App Router — Server Components for data, Client Components pushed to the leaves (verified against current Next.js 16 best practice via web search, Sept 2026)
@@ -38,6 +38,7 @@
 | `components/auth/` | Sign-in form + sign-out | AuthForm, SignOutButton |
 | `components/ui/` | shadcn primitives | Button, Dialog, Badge, Card, Input, Label, Separator, Toaster, Textarea |
 | `hooks/` | Client state | `useAuth()`, `usePanel()` |
+| `scripts/e2e/` + `.github/workflows/ci.yml` | End-to-end suite (emulators + fake model API + Chromium) and CI (lint, unit, build, e2e) | `npm run e2e` → `run.sh` → `inner.sh` |
 | `types/` | Shared domain types | `types/index.ts` (app-wide), `lib/agents/types.ts` (orchestrator-internal) |
 | `proxy.ts` | Route protection middleware | protected: `/dashboard/*`, `/panel/*` |
 

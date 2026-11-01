@@ -1,5 +1,14 @@
 # Agent Changelog: askpanel-web
 
+## 2026-11-01 — BL-038: CI, e2e suite in the repo, lint, paywall wording (PR #3)
+
+- Git flow changed at the user's request: PR per piece of work, self-review, CI green, merge. PR #3 merged as `8590093` (merge commit — keeps two superseded 2026-05-31 docs commits from the session branch in history without reapplying them).
+- Lint clean: CustomPersonaEditor form moved inside the dialog content (remounts on open) instead of setState in an effect; PaywallDialog quote; unused DELETE param.
+- PaywallDialog `reason` prop: locked Pro controls now say "That’s a Pro feature" (audit #9). Pro feature list untouched — "100 runs / month" waits on BL-035.
+- `scripts/e2e/` + `npm run e2e`: the M0/M1 harness, self-contained (throwaway key, own emulator user, firebase emulators:exec). 7 scenarios + 14 browser checks. Builds into `.next-e2e` (`NEXT_DIST_DIR` in next.config.ts).
+- `.github/workflows/ci.yml`: lint, unit tests, build; e2e job (Java 21, Playwright 1.56.1 installed with --no-save). Both jobs green on GitHub (≈2 and ≈3 min).
+- Self-review (code-review skill) found 10 items; fixed 8 (orphaned child runner on scenario failure, transaction retries under 12-way contention, e2e build clobbering .next, fake server crash on bad JSON, .tsx hook mismatch, duplicated scroller lookup, a check hard-coded to pass). Skipped: "paywall dropped the feature list" (it didn't), custom-persona role detection in the fake (documented).
+
 ## 2026-10-31 — BL-034, BL-036, BL-039, v2 M1 (chat), font fix
 
 - BL-034 (`2f4848f`): PanelInput submit callback was missing `persona`/`parentPanelId` deps → a persona picked after typing was ignored.
