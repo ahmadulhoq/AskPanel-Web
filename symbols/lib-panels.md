@@ -28,3 +28,6 @@
 
 2026-11-01 (BL-049, PR #11):
 | `setPanelSharing(panelId, uid, isPublic)` | share.ts | Owner-only transaction toggling `isPublic` (single debates are shared, never conversations). Returns false if missing / not the owner |
+
+2026-11-01 (BL-051, PR #13):
+- `diffCompare`: revisions as proposer turns in round 2 (keys `r<i>`); `synthesis_start` sent once `readyForJudge` (or with the judgement), round 2 when `isRevised`. `panelReducer`: `verdictPending` (synthesis_start → result/complete/error); `agent_start` settles a stale streaming turn of the same agent+index in another round (agent_token has no round).

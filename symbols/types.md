@@ -24,3 +24,4 @@
 - Any new field added to `PanelDoc`/`UserDoc` needs a corresponding default in every write path that creates that document (`POST /api/panels`, `POST /api/auth/session`) — there's no schema migration mechanism, so a missing default shows up as `undefined` reads in old documents that predate the field (handled today via `?? null`/`?? 0` fallbacks at every read site, not via a migration).
 
 - 2026-11-01 (BL-043): `AgentRole` adds 'proposer'; `PanelMode`; `CompareScore`, `CompareJudgement`, `PanelCompare`; `PanelDoc.mode` / `.compare`; `LiveTurn.index`; SSE agent events carry optional `index`; new `compare_result` event; `AgentTurnState.index`; `PanelState.comparison`; `DebateSettings.mode`.
+- 2026-11-01: `PanelCompare` gains `options`, `revise`, `revisions` (BL-051); `PanelState.verdictPending`; `PanelDoc.runWindowEndsAt` (PR #11); `MessageView.debate.isPublic` (PR #11).

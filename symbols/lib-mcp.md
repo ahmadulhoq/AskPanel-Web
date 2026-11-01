@@ -11,3 +11,4 @@
 | `createApiToken`, `listApiTokens`, `revokeApiToken`, `verifyApiToken`, `MAX_TOKENS` (5), `TokenLimitError` | tokens.ts | `apiTokens/{sha256}` {uid, name, hint, createdAt, lastUsedAt}; cap enforced in a transaction; verify also requires the Auth user to exist, be enabled, and not have revoked sessions after the token's creation (60s per-instance cache); lastUsedAt touched ≤ every 10 min |
 
 Routes: `POST /api/mcp` (Bearer token → 401 otherwise; each message counts against `LIMITS.mcp` 120/min; batches ≤5, extra entries get -32600; empty batch 400; 202 for notification-only; GET/DELETE 405). `GET/POST /api/account/tokens`, `DELETE /api/account/tokens/[id]`. UI: `components/account/ApiTokens.tsx` on /account ("Connect AI tools (MCP)"). Tokens deleted with the account.
+- 2026-11-01 (BL-051): `start_debate` accepts `options` (2–3 strings, compare mode) → `createPanel`.

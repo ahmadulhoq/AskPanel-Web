@@ -68,8 +68,8 @@
 - Hosting: `apphosting.yaml` `cpuAlwaysAllocated: true` keeps CPU for runs after the starting request ends; without it, runs stall while unwatched and resume on the next view
 
 ### Compare-options panel (2026-11-01, BL-043)
-- Entry: dashboard ModeSelector "Compare options" or chat debate settings → `mode: 'compare'` through `createPanel` (stores `mode`, `compare: { proposals: [], critic: null, judgement: null }`)
-- Run: `runPanelJob` → `runCompare`: 3 proposers (streamed, index 0..2) → critic → judge (`tool_use`) → complete with `finalAnswer`/`confidence` like critique, so lists, chat verdicts, title, export and sharing all work
+- Entry: dashboard ModeSelector "Compare options" or chat debate settings → `mode: 'compare'` through `createPanel` (stores `mode`, `compare: emptyCompare(options, revise)`). Optional typed options (2–3, `sanitizeOptions`) from the settings fields / MCP `options`; `revise` = Pro (BL-051)
+- Run: `runPanelJob` → `runCompare`: n proposers (one per option, or 3) → critic → Pro: n revisions (round 2) → judge (`requestToolCall`, sees revised options) → complete with `finalAnswer`/`confidence` like critique, so lists, chat verdicts, title, export and sharing all work
 - View: `diffCompare` → same SSE events (+ `index`, `compare_result`) → `panelReducer` → `ThreadView`; the share page replays the stored doc the same way (`stateFromPanel`)
 
 ### Follow-up Panel

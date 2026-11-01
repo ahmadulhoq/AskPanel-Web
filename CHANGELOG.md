@@ -1,5 +1,16 @@
 # Agent Changelog: askpanel-web
 
+## 2026-11-01 — BL-051 compare follow-ups (PR #13)
+
+- User decision: build both. Typed options (2–3; settings fields in chat/dashboard, "Debate this", Run the panel when the assistant chose compare, MCP `options`) — one proposer per option. Pro: a revision round after the critique (round 2), judge weighs the revised options.
+- Self-review: 9 findings, all fixed (false "judging" indicator before revisions → stream-driven `verdictPending`; client/server option rules differed → client uses `sanitizeOptions`; proposal options used the settings' mode; tokens could reach a stale round-1 turn; old plain-text handoff; first-send extras lost on failure; unbounded sanitizer work; duplicated limit; three "revised" rules → `isRevised`).
+- e2e: 27 runner scenarios, 58 browser checks; unit 71. Found while testing: a scenario left a debate running into the next one (stats bled over) — scenarios must await what they start.
+
+## 2026-11-01 — BL-029 firebase-admin 14 (PR #12)
+
+- User approved "upgrade now, pin Node 22". Read firebase-admin v14.0.0 and @google-cloud/firestore 8/9 breaking changes (Node versions, removed Instance ID / legacy namespace / legacy FCM types) — none used. `engines.node >=22`; repo-rules (both copies) updated; BL-002 notes the App Hosting runtime must be nodejs22+. Scenario 15 now exercises the `auth/user-not-found` path under v14. All 80 e2e checks passed.
+- Decisions recorded the same day: debate effort stays high; fresh free allowance when Pro ends; BL-052 MCP OAuth after launch.
+
 ## 2026-11-01 — BL-035 Pro cap + BL-049 sharing single debates (PR #11)
 
 - User decisions: Pro capped at 100 debates per 30 days; share single debates, never conversations; when Pro ends, the free allowance starts fresh.
