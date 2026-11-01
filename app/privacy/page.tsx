@@ -46,6 +46,10 @@ export default function PrivacyPage() {
             message — so we can tell how well it decides.
           </li>
           <li>
+            <strong>API tokens (if you create any):</strong> a one-way hash of each token, its name, and when it was
+            created and last used. Debates you start through them are stored like any other.
+          </li>
+          <li>
             <strong>Server logs:</strong> errors and events with your account ID, kept by our
             hosting provider for a limited time to keep the service running.
           </li>

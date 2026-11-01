@@ -303,6 +303,49 @@ try {
   const expected = ['answer', 'propose', 'just_answer', 'run_proposal', 'debate', 'debate_this', 'debate_button']
   check('routing decisions and overrides are logged', expected.every((e) => events.includes(e)), JSON.stringify(events))
 
+  // ── MCP server: API tokens, both protocol eras, async debate tools ────
+  await page.goto(BASE + '/account')
+  await page.getByPlaceholder('Token name, e.g. Claude Code on my laptop').fill('e2e laptop')
+  await page.getByRole('button', { name: 'Create token' }).click()
+  const apiToken = (await page.locator('[data-token]').innerText()).trim()
+  const mcp = async (body, token = apiToken) => {
+    const res = await fetch(BASE + '/api/mcp', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(body),
+    })
+    return { status: res.status, body: res.status === 202 ? null : await res.json() }
+  }
+  check('MCP: requests without a valid token are refused', (await mcp({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, null)).status === 401)
+  const init = await mcp({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e', version: '1' } } })
+  const initialized = await mcp({ jsonrpc: '2.0', method: 'notifications/initialized' })
+  const listed = await mcp({ jsonrpc: '2.0', id: 2, method: 'tools/list' })
+  check('MCP, legacy client: initialize, then the two tools',
+    init.body?.result?.protocolVersion === '2025-06-18' && initialized.status === 202
+      && listed.body?.result?.tools?.map((t) => t.name).join() === 'start_debate,get_debate_result', JSON.stringify(listed.body).slice(0, 120))
+  const batch = await mcp(Array.from({ length: 6 }, (_, i) => ({ jsonrpc: '2.0', id: 100 + i, method: 'tools/list' })))
+  check('MCP: batches are capped, and every request gets an answer',
+    Array.isArray(batch.body) && batch.body.length === 6 && batch.body.filter((r) => r.result).length === 5 && batch.body[5].error?.code === -32600)
+  check('MCP: an empty batch is an invalid request', (await mcp([])).status === 400)
+  const modern = { _meta: { 'io.modelcontextprotocol/protocolVersion': '2026-07-28' } }
+  const discover = await mcp({ jsonrpc: '2.0', id: 3, method: 'server/discover', params: modern })
+  check('MCP, modern client: server/discover', discover.body?.result?.supportedVersions?.includes('2026-07-28'))
+  const started = await mcp({ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { ...modern, name: 'start_debate', arguments: { question: 'Should our support team move to a four-day week?' } } })
+  const debate = started.body?.result?.structuredContent
+  check('MCP: start_debate returns a debate id at once', !!debate?.debate_id && started.body.result.resultType === 'complete', JSON.stringify(started.body).slice(0, 160))
+  let result = null
+  for (let i = 0; i < 6 && result?.status !== 'complete'; i++) {
+    const r = await mcp({ jsonrpc: '2.0', id: 10 + i, method: 'tools/call', params: { ...modern, name: 'get_debate_result', arguments: { debate_id: debate?.debate_id, wait_seconds: 20 } } })
+    result = r.body?.result?.structuredContent
+  }
+  check('MCP: get_debate_result waits for and returns the verdict', result?.status === 'complete' && /Verdict/.test(result.final_answer ?? ''), JSON.stringify(result).slice(0, 160))
+  await page.goto(BASE + '/dashboard')
+  check('a debate started over MCP shows up in the conversation list', !!debate?.url && await page.locator(`a[href="${new URL(debate.url).pathname}"]`).count() === 1)
+  await page.goto(BASE + '/account')
+  await page.getByRole('button', { name: 'Revoke' }).click()
+  await page.getByText('e2e laptop').waitFor({ state: 'detached', timeout: 10000 })
+  check('a revoked token stops working', (await mcp({ jsonrpc: '2.0', id: 30, method: 'tools/list' })).status === 401)
+
   // ── Launch basics: legal pages, paging, deletion ─────────────────────
   await page.goto(BASE + '/')
   check('landing page links to the privacy policy and terms',

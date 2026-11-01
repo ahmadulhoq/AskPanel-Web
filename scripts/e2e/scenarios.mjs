@@ -27,6 +27,7 @@ const { listPanels, PANEL_PAGE_SIZE } = await imp('lib/panels/list.ts')
 const { adminAuth } = await imp('lib/firebase/admin.ts')
 const { migrateUserPanels } = await imp('lib/conversations/migrate.ts')
 const { listConversations } = await imp('lib/conversations/list.ts')
+const { createApiToken, verifyApiToken, TokenLimitError, MAX_TOKENS } = await imp('lib/mcp/tokens.ts')
 const { Timestamp } = await import(pathToFileURL(createRequire(path.join(ROOT, 'package.json')).resolve('firebase-admin/firestore')).href)
 
 const db = adminDb()
@@ -389,6 +390,29 @@ await scenario('20. v1 migration: chains become conversations, idempotently; lat
   assert.equal(await migrateUserPanels('u20', true), 1)
   assert.equal((await panel('m-d')).conversationId, 'v1-m-a')
   assert.equal((await db.collection('conversations').doc('v1-m-a').get()).data().debateCount, 3)
+})
+
+await scenario('21. API tokens: capped under concurrency; disabled or revoked accounts lose access', async () => {
+  await adminAuth().createUser({ uid: 'u21' })
+  const outcomes = await Promise.all(Array.from({ length: MAX_TOKENS + 3 }, () =>
+    createApiToken('u21', 'parallel').then(() => 'ok', (e) => (e instanceof TokenLimitError ? 'capped' : 'other:' + e.message))))
+  assert.equal(outcomes.filter((o) => o === 'ok').length, MAX_TOKENS, JSON.stringify(outcomes))
+  assert.equal((await db.collection('apiTokens').where('uid', '==', 'u21').get()).size, MAX_TOKENS)
+
+  await adminAuth().createUser({ uid: 'u22' })
+  const { token: disabledToken } = await createApiToken('u22', 'x')
+  await adminAuth().updateUser('u22', { disabled: true })
+  assert.equal(await verifyApiToken(disabledToken), null, 'disabled account')
+
+  await adminAuth().createUser({ uid: 'u23' })
+  const { token: oldToken } = await createApiToken('u23', 'x')
+  await sleep(1100) // tokensValidAfterTime has one-second resolution
+  await adminAuth().revokeRefreshTokens('u23')
+  assert.equal(await verifyApiToken(oldToken), null, 'revoked sessions revoke older tokens')
+
+  await adminAuth().createUser({ uid: 'u24' })
+  const { token: good } = await createApiToken('u24', 'x')
+  assert.equal(await verifyApiToken(good), 'u24')
 })
 
 for (const r of results) console.log(r.join('  '))

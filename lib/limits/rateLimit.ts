@@ -11,6 +11,7 @@ export const LIMITS = {
   reply: { max: 20, windowMs: 60 * 1000 },           // quick replies, per minute
   context: { max: 30, windowMs: 60 * 60 * 1000 },    // URL fetches + file extractions, per hour
   session: { max: 30, windowMs: 10 * 60 * 1000 },    // session cookies issued, per 10 minutes
+  mcp: { max: 120, windowMs: 60 * 1000 },            // MCP requests (API tokens), per minute
 } satisfies Record<string, Limit>
 
 export type LimitName = keyof typeof LIMITS

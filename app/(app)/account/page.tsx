@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { BillingPortalButton } from '@/components/account/BillingPortalButton'
 import { DeleteAccountButton } from '@/components/account/DeleteAccountButton'
+import { ApiTokens } from '@/components/account/ApiTokens'
+import { listApiTokens } from '@/lib/mcp/tokens'
 import { SiteFooter } from '@/components/SiteFooter'
 
 export const metadata = { title: 'Account — AskPanel' }
@@ -95,6 +97,18 @@ export default async function AccountPage() {
               <Button>Upgrade to Pro</Button>
             </Link>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Connect AI tools (MCP)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ApiTokens
+            initialTokens={await listApiTokens(user.uid)}
+            mcpUrl={`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://askpanel.app'}/api/mcp`}
+          />
         </CardContent>
       </Card>
 
