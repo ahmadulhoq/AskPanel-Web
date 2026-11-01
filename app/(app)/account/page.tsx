@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { BillingPortalButton } from '@/components/account/BillingPortalButton'
+import { DeleteAccountButton } from '@/components/account/DeleteAccountButton'
+import { SiteFooter } from '@/components/SiteFooter'
 
 export const metadata = { title: 'Account — AskPanel' }
 
@@ -95,6 +97,22 @@ export default async function AccountPage() {
           )}
         </CardContent>
       </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Delete account</CardTitle>
+          <CardDescription>
+            Permanently delete your account, panels and conversations
+            {tier === 'pro' ? ', and cancel your subscription' : ''}.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DeleteAccountButton hasSubscription={Boolean(userData?.subscription?.stripeSubscriptionId)} />
+        </CardContent>
+      </Card>
+      <div className="mt-10">
+        <SiteFooter />
+      </div>
     </main>
   )
 }

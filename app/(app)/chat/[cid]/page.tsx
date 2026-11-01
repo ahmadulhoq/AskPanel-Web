@@ -6,6 +6,7 @@ import { getOwnedConversation, loadMessages } from '@/lib/conversations/store'
 import { DEFAULT_DEBATE_SETTINGS, sanitizeDebateSettings } from '@/lib/conversations/settings'
 import { ConversationView } from '@/components/chat/ConversationView'
 import { Button } from '@/components/ui/button'
+import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton'
 
 interface Props {
   params: Promise<{ cid: string }>
@@ -48,7 +49,15 @@ export default async function ConversationPage({ params, searchParams }: Props) 
               ← Chats
             </Button>
           </Link>
-          <span className="truncate text-sm font-medium">{conversation.title ?? 'New conversation'}</span>
+          <div className="flex min-w-0 items-center gap-1">
+            <span className="truncate text-sm font-medium">{conversation.title ?? 'New conversation'}</span>
+            <ConfirmDeleteButton
+              what="conversation"
+              endpoint={`/api/conversations/${cid}`}
+              redirectTo="/chat"
+              description="All its messages and the debates started in it are deleted. This can’t be undone."
+            />
+          </div>
         </div>
       </header>
       <ConversationView

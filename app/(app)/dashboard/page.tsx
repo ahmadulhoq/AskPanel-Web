@@ -6,9 +6,7 @@ import { PanelList } from '@/components/dashboard/PanelList'
 import { SignOutButton } from '@/components/auth/SignOutButton'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { PERSONA_MAP } from '@/lib/agents/personas'
-import type { PanelDoc } from '@/types'
-import type { PanelSummary } from '@/components/dashboard/PanelList'
+import { listPanels } from '@/lib/panels/list'
 
 export const metadata = { title: 'Dashboard — AskPanel' }
 
@@ -36,35 +34,7 @@ export default async function DashboardPage({
   const runsLeft = Math.max(0, 5 - freeRunsUsed)
   const customPersona = userData?.customPersona ?? null
 
-  const panelsSnap = await db
-    .collection('panels')
-    .where('userId', '==', user.uid)
-    .orderBy('createdAt', 'desc')
-    .limit(20)
-    .get()
-
-  // Serialise to plain objects — no Timestamps passed to client components.
-  const panels: PanelSummary[] = panelsSnap.docs.map(d => {
-    const data = d.data() as PanelDoc
-    const isCustom = data.persona === 'custom'
-    const personaLabel =
-      isCustom
-        ? (data.customPersona?.label ?? 'Custom')
-        : data.persona !== 'general'
-          ? (PERSONA_MAP[data.persona]?.label ?? data.persona)
-          : null
-    return {
-      id: d.id,
-      question: data.question,
-      title: data.title ?? null,
-      persona: data.persona,
-      personaLabel,
-      status: data.status,
-      isPublic: data.isPublic,
-      parentPanelId: data.parentPanelId ?? null,
-      confidence: data.confidence ?? null,
-    }
-  })
+  const { panels, hasMore } = await listPanels(user.uid)
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
@@ -103,7 +73,7 @@ export default async function DashboardPage({
         <QuestionComposer tier={tier} initialCustomPersona={customPersona} />
       </section>
 
-      <PanelList panels={panels} />
+      <PanelList initialPanels={panels} initialHasMore={hasMore} />
     </main>
   )
 }

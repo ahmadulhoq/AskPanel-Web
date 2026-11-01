@@ -4,6 +4,7 @@ import { getSessionUser } from '@/lib/auth'
 import { adminDb } from '@/lib/firebase/admin'
 import { createPanel } from '@/lib/panels/create'
 import { FreeLimitReachedError } from '@/lib/billing/runs'
+import { RateLimitedError, rateLimitedResponse } from '@/lib/limits/rateLimit'
 import { debateContext } from '@/lib/conversations/context'
 import { sanitizeDebateSettings } from '@/lib/conversations/settings'
 import {
@@ -68,6 +69,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (err instanceof FreeLimitReachedError) {
       return NextResponse.json({ error: 'FREE_LIMIT_REACHED' }, { status: 402 })
     }
+    if (err instanceof RateLimitedError) return rateLimitedResponse(err)
     throw err
   }
 

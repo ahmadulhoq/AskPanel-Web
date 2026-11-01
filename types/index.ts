@@ -180,3 +180,16 @@ export interface PanelState {
   confidence: ConfidenceLevel | null
   errorMessage: string | null
 }
+
+// A panel in the dashboard list (plain values; no Timestamps cross to the client).
+export interface PanelSummary {
+  id: string
+  question: string
+  title: string | null
+  persona: string
+  personaLabel: string | null
+  status: PanelStatus
+  isPublic: boolean
+  parentPanelId: string | null
+  confidence: ConfidenceLevel | null
+}

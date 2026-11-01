@@ -5,6 +5,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { PanelThread } from '@/components/panel/PanelThread'
 import { QuestionBubble } from '@/components/panel/QuestionBubble'
 import { ShareButton } from '@/components/panel/ShareButton'
+import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton'
 import { ThreadScroller } from '@/components/panel/ThreadScroller'
 import { Button } from '@/components/ui/button'
 import type { PanelDoc } from '@/types'
@@ -45,7 +46,17 @@ export default async function PanelPage({ params }: Props) {
               ← Dashboard
             </Button>
           </Link>
-          {panel.isPublic && <ShareButton url={shareUrl} />}
+          <div className="flex items-center gap-1">
+            {panel.isPublic && <ShareButton url={shareUrl} />}
+            <ConfirmDeleteButton
+              what="panel"
+              endpoint={`/api/panels/${panelId}`}
+              redirectTo={panel.conversationId ? `/chat/${panel.conversationId}` : '/dashboard'}
+              description={panel.conversationId
+                ? 'The debate and its verdict are removed from your conversation too. This can’t be undone.'
+                : 'The question, debate and verdict are deleted, and any share link stops working. This can’t be undone.'}
+            />
+          </div>
         </div>
       </header>
 

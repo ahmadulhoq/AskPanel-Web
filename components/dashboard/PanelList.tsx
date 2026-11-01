@@ -5,19 +5,7 @@ import Link from 'next/link'
 import { Search, Lock, CornerDownRight, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { ConfidenceBadge } from '@/components/panel/ConfidenceBadge'
-import type { ConfidenceLevel, PanelStatus } from '@/types'
-
-export interface PanelSummary {
-  id: string
-  question: string
-  title: string | null
-  persona: string
-  personaLabel: string | null
-  status: PanelStatus
-  isPublic: boolean
-  parentPanelId: string | null
-  confidence: ConfidenceLevel | null
-}
+import type { PanelSummary } from '@/types'
 
 type StatusFilter = 'all' | 'complete' | 'running' | 'error'
 
@@ -29,10 +17,34 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
 ]
 
 interface Props {
-  panels: PanelSummary[]
+  initialPanels: PanelSummary[]
+  initialHasMore: boolean
 }
 
-export function PanelList({ panels }: Props) {
+export function PanelList({ initialPanels, initialHasMore }: Props) {
+  const [panels, setPanels] = useState(initialPanels)
+  const [hasMore, setHasMore] = useState(initialHasMore)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [loadError, setLoadError] = useState('')
+
+  async function loadMore() {
+    const last = panels.at(-1)
+    if (!last) return
+    setLoadingMore(true)
+    setLoadError('')
+    try {
+      const res = await fetch(`/api/panels?after=${encodeURIComponent(last.id)}`)
+      if (!res.ok) throw new Error()
+      const page = (await res.json()) as { panels: PanelSummary[]; hasMore: boolean }
+      setPanels((all) => [...all, ...page.panels.filter((p) => !all.some((a) => a.id === p.id))])
+      setHasMore(page.hasMore)
+    } catch {
+      setLoadError('Could not load more panels.')
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 
@@ -58,7 +70,7 @@ export function PanelList({ panels }: Props) {
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Recent panels
         </h2>
-        <span className="text-xs text-muted-foreground">{panels.length} total</span>
+        <span className="text-xs text-muted-foreground">{panels.length}{hasMore ? '+' : ''} total</span>
       </div>
 
       {showFilters && (
@@ -152,6 +164,20 @@ export function PanelList({ panels }: Props) {
             </li>
           ))}
         </ul>
+      )}
+
+      {hasMore && (
+        <div className="mt-4 flex flex-col items-center gap-1">
+          <button
+            type="button"
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="rounded-full border px-4 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
+          >
+            {loadingMore ? 'Loading…' : 'Show more'}
+          </button>
+          {loadError && <p className="text-xs text-destructive">{loadError}</p>}
+        </div>
       )}
     </section>
   )
