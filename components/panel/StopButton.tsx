@@ -6,10 +6,12 @@ import { Square } from 'lucide-react'
 interface Props {
   panelId: string
   onStopped?: () => void
+  // The debate finished on its own before the stop landed.
+  onAlreadyFinished?: () => void
 }
 
 // Stops a running debate. The thread then shows "You stopped this debate." via the stream.
-export function StopButton({ panelId, onStopped }: Props) {
+export function StopButton({ panelId, onStopped, onAlreadyFinished }: Props) {
   const [stopping, setStopping] = useState(false)
   const [error, setError] = useState('')
 
@@ -18,9 +20,13 @@ export function StopButton({ panelId, onStopped }: Props) {
     setError('')
     try {
       const res = await fetch(`/api/panels/${panelId}/stop`, { method: 'POST' })
-      // 409: it finished on its own in the meantime — nothing to stop.
-      if (res.ok || res.status === 409) {
+      if (res.ok) {
         onStopped?.()
+        return
+      }
+      if (res.status === 409) {
+        onAlreadyFinished?.()
+        setStopping(false)
         return
       }
       const data = await res.json().catch(() => ({}))

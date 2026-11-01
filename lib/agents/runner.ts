@@ -34,11 +34,16 @@ export async function runPanelJob(panelId: string): Promise<void> {
   if (!panel) return
 
   let lost = false
+  const abort = new AbortController()
+  const loseLease = () => {
+    lost = true
+    abort.abort()
+  }
   const heartbeat = setInterval(() => {
     db.runTransaction(async (tx) => {
       const data = (await tx.get(ref)).data() as PanelDoc | undefined
       if (data?.run?.id !== leaseId) {
-        lost = true
+        loseLease()
         return
       }
       tx.update(ref, { 'run.heartbeatAt': Date.now() })
@@ -46,10 +51,10 @@ export async function runPanelJob(panelId: string): Promise<void> {
   }, HEARTBEAT_MS)
 
   // Notice right away when the lease is taken from us (Stop clears it) instead of at the
-  // next write: breaking out of the loop below aborts the model request in flight.
+  // next write, and abort the model request in flight (streaming or not).
   const unwatch = ref.onSnapshot(
     (snap) => {
-      if ((snap.data() as PanelDoc | undefined)?.run?.id !== leaseId) lost = true
+      if ((snap.data() as PanelDoc | undefined)?.run?.id !== leaseId) loseLease()
     },
     (err) => console.error('[runner] lease watch failed', panelId, err),
   )
@@ -72,6 +77,7 @@ export async function runPanelJob(panelId: string): Promise<void> {
       customPersona: panel.customPersona ?? undefined,
       rounds: panel.rounds ?? [],
       leaseId,
+      signal: abort.signal,
     })
 
     for await (const event of run) {

@@ -1,32 +1,32 @@
 import { getAnthropicClient, DEFAULT_MODEL } from '@/lib/anthropic'
 import { adminDb } from '@/lib/firebase/admin'
-import { REPLY_BUDGET_CHARS, summaryBacklog, transcriptLine } from './context'
-import { conversationRef, loadMessages } from './store'
+import { summaryBacklog, transcriptLine, type SeqMessage } from './context'
+import { conversationRef } from './store'
 import type { ConversationDoc } from '@/types'
 
-// How far back the summarizer looks for messages that left the reply window.
-const SUMMARY_LOOKBACK = 200
-// Keeps the summary well inside the reply budget.
+// The summary rides on top of the reply budget; keep it bounded.
 const MAX_SUMMARY_CHARS = 4_000
+
+interface SummaryInput {
+  // Recent messages, oldest first, as the reply route loaded them plus the new pair.
+  history: SeqMessage[]
+  summary: string | null
+  summarizedThroughSeq: number
+}
 
 const SUMMARY_SYSTEM = `You maintain the running summary of a conversation between a user and AskPanel's assistant, so the assistant can keep helping after older messages drop out of its context.
 
 Rewrite the existing summary to also cover the new messages. Keep: the user's goals, constraints, numbers, names, decisions made, open questions, and every panel verdict's conclusion with its confidence. Drop pleasantries and repetition. Write compact plain prose or short bullets, at most 300 words. Output only the summary.`
 
 // Folds messages that have left the reply window into the conversation's rolling summary
-// (spec §5). Called after a reply is saved. Best effort: never throws.
-export async function updateSummary(cid: string): Promise<void> {
+// (spec §5). Called after a reply is saved, with the messages the route already loaded, so
+// the usual case (nothing to fold) costs no reads. Best effort: never throws.
+export async function updateSummary(cid: string, input: SummaryInput): Promise<void> {
   try {
-    const ref = conversationRef(cid)
-    const conversation = (await ref.get()).data() as ConversationDoc | undefined
-    if (!conversation) return
-    const through = conversation.summarizedThroughSeq ?? 0
-    const previous = conversation.summary ?? null
-
-    const history = await loadMessages(cid, SUMMARY_LOOKBACK)
-    const budget = REPLY_BUDGET_CHARS - (previous?.length ?? 0)
-    const backlog = summaryBacklog(history, through, budget)
+    const { history, summary: previous, summarizedThroughSeq: through } = input
+    const backlog = summaryBacklog(history, through)
     if (!backlog.length) return
+    const ref = conversationRef(cid)
 
     const transcript = backlog.map(transcriptLine).filter(Boolean).join('\n')
     const res = await getAnthropicClient().messages.create({

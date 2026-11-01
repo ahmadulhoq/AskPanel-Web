@@ -6,6 +6,8 @@ import type { SSEEvent, PanelState, AgentTurnState, SynthesisState } from '@/typ
 type Action = SSEEvent | { type: 'reset' }
 
 const MAX_RECONNECTS = 5
+// Shown when this page gave up reconnecting. The debate itself may still be running.
+export const CONNECTION_LOST_MESSAGE = 'Connection lost. Please refresh.'
 
 function reducer(state: PanelState, action: Action): PanelState {
   if (action.type === 'reset') {
@@ -131,7 +133,7 @@ export function usePanel(panelId: string | null) {
         es?.close()
         if (finished) return
         if (attempts >= MAX_RECONNECTS) {
-          dispatch({ type: 'error', message: 'Connection lost. Please refresh.' })
+          dispatch({ type: 'error', message: CONNECTION_LOST_MESSAGE })
           return
         }
         attempts++

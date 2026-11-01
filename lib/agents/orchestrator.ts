@@ -16,6 +16,7 @@ async function* streamAgent(
   role: 'respondent' | 'critic',
   prompt: { system: string; user: string },
   model: string,
+  signal?: AbortSignal,
 ): AsyncGenerator<{ token?: string; full: string }> {
   const stream = await getAnthropicClient().messages.create({
     model,
@@ -23,7 +24,7 @@ async function* streamAgent(
     system: [{ type: 'text', text: prompt.system, cache_control: { type: 'ephemeral' } }],
     messages: [{ role: 'user', content: prompt.user }],
     stream: true,
-  })
+  }, { signal })
 
   let full = ''
   for await (const event of stream) {
@@ -38,6 +39,7 @@ async function* streamAgent(
 async function callSynthesizer(
   prompt: { system: string; user: string },
   model: string,
+  signal?: AbortSignal,
 ): Promise<{ decision: SynthesisDecision; confidence: ConfidenceLevel; reasoning: string; issuesFound: number; finalAnswer: string }> {
   const response = await getAnthropicClient().messages.create({
     model,
@@ -46,7 +48,7 @@ async function callSynthesizer(
     tools: SYNTHESIZER_TOOL as Anthropic.Tool[],
     tool_choice: { type: 'any' },
     messages: [{ role: 'user', content: prompt.user }],
-  })
+  }, { signal })
 
   const toolUse = response.content.find(b => b.type === 'tool_use')
   if (!toolUse || toolUse.type !== 'tool_use') {
@@ -100,7 +102,7 @@ function withRound(data: PanelData, round: number, patch: Record<string, unknown
 export const MAX_ROUNDS = 3
 
 export async function* runPanel(input: OrchestratorInput): SSEGenerator {
-  const { panelId, question, config, persona = 'general', context, customPersona, rounds: stored = [], leaseId } = input
+  const { panelId, question, config, persona = 'general', context, customPersona, rounds: stored = [], leaseId, signal } = input
   // Cost-sensitive values are never taken from the stored doc as-is: tier limits are
   // enforced at creation, this is the backstop.
   const model = DEFAULT_MODEL
@@ -124,7 +126,7 @@ export async function* runPanel(input: OrchestratorInput): SSEGenerator {
         yield { type: 'agent_start', agent: 'respondent', round } satisfies SSEEvent
 
         let respondentContent = ''
-        for await (const chunk of streamAgent('respondent', respondentPrompt, model)) {
+        for await (const chunk of streamAgent('respondent', respondentPrompt, model, signal)) {
           if (chunk.token) {
             yield { type: 'agent_token', agent: 'respondent', token: chunk.token } satisfies SSEEvent
           }
@@ -142,7 +144,7 @@ export async function* runPanel(input: OrchestratorInput): SSEGenerator {
         yield { type: 'agent_start', agent: 'critic', round } satisfies SSEEvent
 
         let criticContent = ''
-        for await (const chunk of streamAgent('critic', criticPrompt, model)) {
+        for await (const chunk of streamAgent('critic', criticPrompt, model, signal)) {
           if (chunk.token) {
             yield { type: 'agent_token', agent: 'critic', token: chunk.token } satisfies SSEEvent
           }
@@ -159,7 +161,7 @@ export async function* runPanel(input: OrchestratorInput): SSEGenerator {
       const synthPrompt = buildSynthesizerPrompt(question, history, isFinalRound)
       yield { type: 'synthesis_start', round } satisfies SSEEvent
 
-      const synthesis = await callSynthesizer(synthPrompt, model)
+      const synthesis = await callSynthesizer(synthPrompt, model, signal)
 
       // If the synthesizer still returns 'continue' on the last round, force 'contested'
       if (isFinalRound && synthesis.decision === 'continue') {
@@ -195,8 +197,9 @@ export async function* runPanel(input: OrchestratorInput): SSEGenerator {
 
     yield { type: 'panel_complete', finalAnswer, confidence: finalConfidence } satisfies SSEEvent
   } catch (err) {
-    // Another runner took over; it owns the panel's status from here.
-    if (err instanceof LeaseLostError) return
+    // Another runner took over, or the run was stopped (the runner aborts on losing its
+    // lease): whoever holds the panel now owns its status.
+    if (err instanceof LeaseLostError || signal?.aborted) return
     const message = err instanceof Error ? err.message : 'Unknown error'
     await leasedUpdate(panelId, leaseId, () => ({ status: 'error', errorMessage: message })).catch(() => {})
     yield { type: 'error', message } satisfies SSEEvent

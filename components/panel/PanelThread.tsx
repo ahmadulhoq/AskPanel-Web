@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { usePanel } from '@/hooks/usePanel'
+import { usePanel, CONNECTION_LOST_MESSAGE } from '@/hooks/usePanel'
 import { AgentTurn } from './AgentTurn'
 import { SynthesisCard } from './SynthesisCard'
 import { FinalAnswer } from './FinalAnswer'
@@ -34,7 +34,8 @@ export function PanelThread({
     if (state.status === 'complete' && state.finalAnswer && state.confidence) {
       reported.current = true
       onComplete?.(state.finalAnswer, state.confidence)
-    } else if (state.status === 'error') {
+    } else if (state.status === 'error' && state.errorMessage !== CONNECTION_LOST_MESSAGE) {
+      // A lost connection is this page's problem, not the debate's: don't report it.
       reported.current = true
       onError?.(state.errorMessage ?? '')
     }

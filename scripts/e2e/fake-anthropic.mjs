@@ -2,12 +2,12 @@
 // service. Respondent/Critic/reply calls stream markdown; the Synthesizer (any request
 // with tools) gets a tool_use; non-streaming calls (titles) get a short text.
 //
-// Control endpoints for tests: POST /__control {tokenDelayMs, failRole, decision},
+// Control endpoints for tests: POST /__control {tokenDelayMs, synthDelayMs, failRole, decision},
 // GET /__stats (calls per role), POST /__reset.
 import http from 'node:http'
 
 const PORT = Number(process.env.FAKE_ANTHROPIC_PORT ?? 8099)
-const DEFAULTS = { tokenDelayMs: 40, failRole: null, decision: 'consensus' }
+const DEFAULTS = { tokenDelayMs: 40, synthDelayMs: 0, failRole: null, decision: 'consensus' }
 const ctl = { ...DEFAULTS }
 const calls = { respondent: 0, critic: 0, synthesizer: 0, title: 0, reply: 0, summary: 0 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -49,6 +49,7 @@ const server = http.createServer(async (req, res) => {
   const msg = { id: 'msg_' + Date.now(), type: 'message', role: 'assistant', model: body.model, stop_sequence: null, usage: { input_tokens: 5, output_tokens: 5 } }
 
   if (role === 'synthesizer') {
+    await sleep(ctl.synthDelayMs)
     res.setHeader('content-type', 'application/json')
     return res.end(JSON.stringify({
       ...msg, stop_reason: 'tool_use',

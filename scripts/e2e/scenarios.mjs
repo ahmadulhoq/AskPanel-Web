@@ -19,6 +19,7 @@ const { stopPanel, StopRejected } = await imp('lib/panels/stop.ts')
 const { STOPPED_MESSAGE } = await imp('lib/panels/constants.ts')
 const { createPanel } = await imp('lib/panels/create.ts')
 const { updateSummary } = await imp('lib/conversations/summary.ts')
+const { loadMessages } = await imp('lib/conversations/store.ts')
 const { Timestamp } = await import(pathToFileURL(createRequire(path.join(ROOT, 'package.json')).resolve('firebase-admin/firestore')).href)
 
 const db = adminDb()
@@ -205,12 +206,32 @@ await scenario('11. rolling summary: folds messages that left the reply window, 
     })
   }
   await batch.commit()
-  await updateSummary(cid)
+  const history = await loadMessages(cid, 80)
+  await updateSummary(cid, { history, summary: null, summarizedThroughSeq: 0 })
   const c = (await db.collection('conversations').doc(cid).get()).data()
   assert.equal(c.summary, 'They are planning a product launch next month.')
   assert.ok(c.summarizedThroughSeq >= 1000 && c.summarizedThroughSeq < 1013, `through ${c.summarizedThroughSeq}`)
-  await updateSummary(cid) // nothing new has left the window
-  assert.equal((await fake('/__stats')).summary, 1)
+  // Nothing new has left the window: no model call.
+  await updateSummary(cid, { history, summary: c.summary, summarizedThroughSeq: c.summarizedThroughSeq })
+  // A stale caller (summary already advanced by someone else) must not overwrite it.
+  await updateSummary(cid, { history, summary: null, summarizedThroughSeq: 0 })
+  assert.equal((await db.collection('conversations').doc(cid).get()).data().summarizedThroughSeq, c.summarizedThroughSeq)
+  assert.equal((await fake('/__stats')).summary, 2)
+})
+
+await scenario('12. Stop while the Synthesizer call is pending aborts it', async () => {
+  await fake('/__control', { tokenDelayMs: 5, synthDelayMs: 10000 })
+  await makeUser('u12', 'pro', 0); await makePanel('p12', 'u12')
+  const running = runPanelJob('p12')
+  await until(async () => (await panel('p12'))?.rounds?.[0]?.critic, 'critic to finish')
+  await sleep(300) // synthesizer request in flight
+  const t0 = Date.now()
+  assert.deepEqual(await stopPanel('p12', 'u12'), { refunded: false }, 'Pro runs are not counted, so nothing is refunded')
+  await running
+  assert.ok(Date.now() - t0 < 3000, `runner took ${Date.now() - t0}ms to stop`)
+  const p = await panel('p12')
+  assert.equal(p.status, 'error'); assert.equal(p.errorMessage, STOPPED_MESSAGE)
+  assert.equal(p.rounds[0].synthesizer ?? null, null)
 })
 
 for (const r of results) console.log(r.join('  '))

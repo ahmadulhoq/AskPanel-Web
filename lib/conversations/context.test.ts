@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { toModelMessages, debateContext, summaryBacklog, REPLY_WINDOW_MESSAGES, type ContextMessage } from './context.ts'
+import { toModelMessages, debateContext, summaryBacklog, replyHistory, REPLY_WINDOW_MESSAGES, type ContextMessage } from './context.ts'
 
 const user = (content: string): ContextMessage => ({ role: 'user', kind: 'text', content, status: 'complete', debate: null })
 const reply = (content: string, status: ContextMessage['status'] = 'complete'): ContextMessage =>
@@ -67,15 +67,16 @@ test('a stopped debate is described as stopped, not failed', () => {
   assert.match(msgs[1].content, /stopped/)
 })
 
-test('the rolling summary opens the first user turn and counts against the budget', () => {
+test('the rolling summary opens the first user turn without shrinking the message budget', () => {
   const msgs = toModelMessages([reply('dangling'), user('Next question')], 24_000, 'They run a bakery.')
   assert.equal(msgs.length, 1)
   assert.equal(msgs[0].role, 'user')
   assert.match(msgs[0].content, /^\[Summary of the earlier conversation\]\nThey run a bakery\.\n\nNext question$/)
 
   const long = 'x'.repeat(90)
-  const budgeted = toModelMessages([user(long), reply(long), user('newest')], 200, 's'.repeat(60))
-  assert.equal(budgeted.length, 1, 'summary length leaves room only for the newest turn')
+  const withSummary = toModelMessages([user(long), reply(long), user('newest')], 200, 's'.repeat(500))
+  const without = toModelMessages([user(long), reply(long), user('newest')], 200)
+  assert.equal(withSummary.length, without.length, 'same messages kept with or without a summary')
 })
 
 const seqd = (m: ContextMessage, seq: number) => ({ ...m, seq })
@@ -97,12 +98,34 @@ test('summaryBacklog: messages pushed out by the character budget, once there ar
   assert.deepEqual(summaryBacklog(history, 3, 4_500), [])
 })
 
+test('summaryBacklog: many short messages trigger too', () => {
+  const history = Array.from({ length: REPLY_WINDOW_MESSAGES + 8 }, (_, i) => seqd(i % 2 ? reply('ok') : user('hi'), i + 1))
+  assert.equal(summaryBacklog(history, 0).length, 8)
+  assert.deepEqual(summaryBacklog(history.slice(1), 0), [], '7 short messages: wait for more')
+})
+
+test('replyHistory: what is not summarized yet, window plus slack', () => {
+  const history = Array.from({ length: 100 }, (_, i) => seqd(user(`m${i}`), i + 1))
+  const seen = replyHistory(history, 10)
+  assert.equal(seen[0].seq, 100 - (REPLY_WINDOW_MESSAGES + 8) + 1)
+  assert.equal(replyHistory(history.slice(0, 20), 10)[0].seq, 11)
+})
+
 test('summaryBacklog: messages beyond the message-count window count too', () => {
   const history = Array.from({ length: REPLY_WINDOW_MESSAGES + 30 }, (_, i) =>
     seqd(i % 2 ? reply('z'.repeat(150)) : user('z'.repeat(150)), i + 1))
   const backlog = summaryBacklog(history, 0)
   assert.equal(backlog.length, 30)
   assert.equal(backlog.at(-1)!.seq, 30)
+})
+
+test('summaryBacklog and the reply agree: unsummarized messages left of the window are still replied to', () => {
+  const big = 'w'.repeat(2_000)
+  // 13 messages × 2k: the 24k window holds 12, one message (2k, below the trigger) is left over.
+  const history = Array.from({ length: 13 }, (_, i) => seqd(i % 2 ? reply(big) : user(big), i + 1))
+  assert.deepEqual(summaryBacklog(history, 0), [])
+  const msgs = toModelMessages(replyHistory(history, 0), 24_000 + 3_000)
+  assert.equal(msgs.reduce((n, m) => n + m.content.length, 0) >= 13 * 2_000, true)
 })
 
 test('debate context leads with the rolling summary, capped at half the budget', () => {

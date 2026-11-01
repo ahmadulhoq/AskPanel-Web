@@ -10,6 +10,19 @@ import {
   conversationRef, getOwnedConversation, loadMessages, messagesRef, nextSeq, toMessageView,
 } from '@/lib/conversations/store'
 import type { NewMessage } from '@/lib/conversations/store'
+import type { ConversationDoc, MessageView } from '@/types'
+
+// Background for a debate on history[questionIndex]. The rolling summary is used only if it
+// covers nothing from the question onwards; for an older question it would leak what came
+// after, so the messages before it are used instead.
+function briefBefore(history: MessageView[], questionIndex: number, conversation: ConversationDoc) {
+  const through = conversation.summarizedThroughSeq ?? 0
+  const before = history.slice(0, questionIndex)
+  if (conversation.summary && history[questionIndex].seq > through) {
+    return debateContext(before.filter((m) => m.seq > through), undefined, conversation.summary)
+  }
+  return debateContext(before)
+}
 
 // "Debate this": run the panel on the user message that a quick reply answered.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ cid: string }> }) {
@@ -47,11 +60,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       isPublic: false,
       persona: debateSettings.persona,
       maxRounds: debateSettings.maxRounds,
-      userContext: debateContext(
-        history.slice(0, questionIndex).filter((m) => m.seq > (conversation.summarizedThroughSeq ?? 0)),
-        undefined,
-        conversation.summary ?? null,
-      ),
+      userContext: briefBefore(history, questionIndex, conversation),
       conversationId: cid,
       messageId: assistantRef.id,
     })

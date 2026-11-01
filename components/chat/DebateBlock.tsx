@@ -42,7 +42,14 @@ export function DebateBlock({ panelId, initial }: Props) {
           {verdict && <ConfidenceBadge level={verdict.confidence} />}
         </div>
         <div className="flex items-center gap-2">
-          {!settled && <StopButton panelId={panelId} onStopped={() => setFailure('stopped')} />}
+          {!settled && (
+            <StopButton
+              panelId={panelId}
+              onStopped={() => setFailure('stopped')}
+              // Show the thread so it picks up the real outcome from the stream.
+              onAlreadyFinished={() => setOpen(true)}
+            />
+          )}
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}

@@ -17,16 +17,18 @@ export default async function ChatListPage() {
   const user = await getSessionUser()
   if (!user) redirect('/login')
 
-  const userData = (await adminDb().collection('users').doc(user.uid).get()).data()
+  const [userSnap, snap] = await Promise.all([
+    adminDb().collection('users').doc(user.uid).get(),
+    adminDb()
+      .collection('conversations')
+      .where('userId', '==', user.uid)
+      .orderBy('updatedAt', 'desc')
+      .limit(50)
+      .get(),
+  ])
+  const userData = userSnap.data()
   const tier = (userData?.subscription?.tier ?? 'free') as 'free' | 'pro'
   const customPersona = userData?.customPersona ?? null
-
-  const snap = await adminDb()
-    .collection('conversations')
-    .where('userId', '==', user.uid)
-    .orderBy('updatedAt', 'desc')
-    .limit(50)
-    .get()
   const conversations = snap.docs.map((d) => {
     const data = d.data() as ConversationDoc
     return { id: d.id, title: data.title, updatedAt: data.updatedAt?.toMillis() }

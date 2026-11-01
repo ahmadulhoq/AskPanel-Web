@@ -12,10 +12,17 @@ interface ModelMessage {
 export const REPLY_BUDGET_CHARS = 24_000
 // Debates get a short background brief; createPanel caps context at 4000 chars.
 const DEBATE_BUDGET_CHARS = 3_500
-// Replies load this many recent messages (the reply route's window).
+// The reply window: the last 60 messages within REPLY_BUDGET_CHARS. Older messages are
+// folded into the rolling summary.
 export const REPLY_WINDOW_MESSAGES = 60
-// Summarize once at least this much has fallen out of the window, to batch the calls.
-const MIN_BACKLOG_CHARS = 3_000
+// Summarize once this much has left the window, to batch the calls. Until then those
+// messages stay in the reply (see REPLY_SLACK_*), so nothing drops out of view meanwhile.
+const BACKLOG_TRIGGER_CHARS = 3_000
+const BACKLOG_TRIGGER_MESSAGES = 8
+export const REPLY_SLACK_CHARS = BACKLOG_TRIGGER_CHARS
+export const REPLY_SLACK_MESSAGES = BACKLOG_TRIGGER_MESSAGES
+// How many recent messages the reply route loads: window + slack + margin for the summarizer.
+export const REPLY_LOAD_MESSAGES = REPLY_WINDOW_MESSAGES + 20
 
 function render(m: ContextMessage): string | null {
   if (m.kind === 'debate') {
@@ -36,14 +43,14 @@ const summaryBlock = (summary: string) => `[Summary of the earlier conversation]
 
 // The conversation as Anthropic messages: alternating roles, starting with the user,
 // trimmed from the oldest end to fit the budget (the newest turn is always kept). A rolling
-// summary of older messages, if any, opens the first user turn and counts against the budget.
+// summary of older messages, if any, opens the first user turn. It is not counted against
+// the budget, so the message window doesn't move when the summary changes length.
 export function toModelMessages(
   history: ContextMessage[],
   maxChars = REPLY_BUDGET_CHARS,
   summary: string | null = null,
 ): ModelMessage[] {
   const intro = summary?.trim() ? summaryBlock(summary) : null
-  if (intro) maxChars = Math.max(0, maxChars - intro.length)
   const merged: ModelMessage[] = []
   for (const m of history) {
     const content = render(m)
@@ -93,7 +100,15 @@ export function summaryBacklog<T extends SeqMessage>(
 ): T[] {
   const backlog = history.slice(0, windowStart(history, maxChars)).filter((m) => m.seq > summarizedThroughSeq)
   const size = backlog.reduce((n, m) => n + (render(m)?.length ?? 0), 0)
-  return size >= MIN_BACKLOG_CHARS ? backlog : []
+  return size >= BACKLOG_TRIGGER_CHARS || backlog.length >= BACKLOG_TRIGGER_MESSAGES ? backlog : []
+}
+
+// What a quick reply sees besides the summary: the messages after it, up to the reply
+// window plus the not-yet-summarized slack.
+export function replyHistory<T extends SeqMessage>(history: T[], summarizedThroughSeq: number): T[] {
+  return history
+    .filter((m) => m.seq > summarizedThroughSeq)
+    .slice(-(REPLY_WINDOW_MESSAGES + REPLY_SLACK_MESSAGES))
 }
 
 // One line per message, for the summarizer and the debate brief.

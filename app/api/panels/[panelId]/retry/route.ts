@@ -46,6 +46,7 @@ export async function POST(
         completedAt: null,
         live: null,
         run: null,
+        stoppedAt: null,
         runCounted: counted,
         'config.model': DEFAULT_MODEL,
       })
