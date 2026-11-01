@@ -5,24 +5,27 @@ import { ComparisonCard } from './ComparisonCard'
 import type { PanelState } from '@/types'
 
 // The debate itself — agent turns grouped by round, with each round's synthesis, or in
-// compare mode the options, the critique and the judge's comparison. Shared by the live
+// compare mode the options and the critique, the revised options (Pro, round 2) and the
+// judge's comparison. Shared by the live
 // thread (PanelThread) and the public share page.
-export function ThreadView({ state }: { state: Pick<PanelState, 'status' | 'turns' | 'syntheses' | 'comparison'> }) {
+export function ThreadView({ state }: { state: Pick<PanelState, 'status' | 'turns' | 'syntheses' | 'comparison' | 'verdictPending'> }) {
   const roundNumbers = [...new Set([
     ...state.turns.map(t => t.round),
     ...state.syntheses.map(s => s.round),
   ])].sort((a, b) => a - b)
 
   const compare = state.turns.some(t => t.agent === 'proposer')
+  // Option names come from each proposer's latest version (revised, if there was a round 2).
   const names: Record<number, string> = {}
-  for (const t of state.turns) {
+  for (const t of [...state.turns].sort((a, b) => a.round - b.round)) {
     if (t.agent === 'proposer' && !t.streaming) {
       const n = (t.index ?? 0) + 1
       names[n] = optionName(t.content, `Option ${n}`)
     }
   }
-  const critiqueDone = state.turns.some(t => t.agent === 'critic' && !t.streaming)
-  const judging = compare && critiqueDone && !state.comparison && state.status === 'running'
+  const lastRound = roundNumbers.at(-1)
+  // The stream says when the judge starts (after the critique, and after revisions on Pro).
+  const judging = compare && state.verdictPending && !state.comparison && state.status === 'running'
 
   return (
     <>
@@ -31,7 +34,7 @@ export function ThreadView({ state }: { state: Pick<PanelState, 'status' | 'turn
           {roundIdx > 0 && (
             <div className="flex items-center gap-3">
               <div className="h-px flex-1 bg-border" />
-              <span className="text-xs text-muted-foreground">Round {round}</span>
+              <span className="text-xs text-muted-foreground">{compare ? 'Revised after the critique' : `Round ${round}`}</span>
               <div className="h-px flex-1 bg-border" />
             </div>
           )}
@@ -48,15 +51,15 @@ export function ThreadView({ state }: { state: Pick<PanelState, 'status' | 'turn
                   key={`${turn.agent}-${round}-${turn.index ?? i}`}
                   turn={turn}
                   issuesFound={sameSynthesis?.issuesFound}
-                  winner={turn.agent === 'proposer' && state.comparison?.winner === (turn.index ?? 0) + 1}
+                  winner={turn.agent === 'proposer' && round === lastRound && state.comparison?.winner === (turn.index ?? 0) + 1}
                 />
               )
             })}
           {state.syntheses
             .filter(s => s.round === round)
             .map(s => <SynthesisCard key={`synth-${round}`} synthesis={s} />)}
-          {round === 1 && state.comparison && <ComparisonCard comparison={state.comparison} names={names} />}
-          {round === 1 && judging && (
+          {round === lastRound && state.comparison && <ComparisonCard comparison={state.comparison} names={names} />}
+          {round === lastRound && judging && (
             <p className="animate-pulse text-center text-xs text-muted-foreground">The judge is weighing the options…</p>
           )}
         </div>

@@ -38,7 +38,7 @@ export async function POST(
 
       const countDebate = await limitInTransaction(tx, 'debate', user.uid)
       // The failed run was refunded, so a retry counts as a new run.
-      const { windowEndsAt } = await reserveRun(tx, userRef, Date.now())
+      const { tier, windowEndsAt } = await reserveRun(tx, userRef, Date.now())
       countDebate()
 
       // Start over from round 1.
@@ -52,7 +52,8 @@ export async function POST(
         live: null,
         run: null,
         stoppedAt: null,
-        compare: data.mode === 'compare' ? emptyCompare() : null,
+        // Same options; the revision round follows the user's plan now.
+        compare: data.mode === 'compare' ? emptyCompare(data.compare?.options ?? null, tier === 'pro') : null,
         runCounted: true,
         runWindowEndsAt: windowEndsAt,
         'config.model': DEFAULT_MODEL,

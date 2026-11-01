@@ -22,9 +22,13 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
       const existing = state.turns.findIndex(
         (t) => t.agent === action.agent && t.round === action.round && t.index === action.index && t.streaming,
       )
+      // The same agent (and proposer) in another round is done now: agent_token, which
+      // carries no round, must only reach this new turn (compare revisions reuse indexes).
+      const settled = state.turns.map((t) =>
+        t.agent === action.agent && t.index === action.index && t.round !== action.round && t.streaming ? { ...t, streaming: false } : t)
       const turns = existing === -1
-        ? [...state.turns, turn]
-        : state.turns.map((t, i) => (i === existing ? turn : t))
+        ? [...settled, turn]
+        : settled.map((t, i) => (i === existing ? turn : t))
       return { ...state, status: 'running', turns }
     }
 
@@ -45,6 +49,9 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
       return { ...state, turns }
     }
 
+    case 'synthesis_start':
+      return { ...state, verdictPending: true }
+
     case 'synthesis_result': {
       const synthesis: SynthesisState = {
         round: action.round,
@@ -53,18 +60,19 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         reasoning: action.reasoning,
         issuesFound: action.issuesFound ?? 0,
       }
-      return { ...state, syntheses: [...state.syntheses, synthesis] }
+      return { ...state, verdictPending: false, syntheses: [...state.syntheses, synthesis] }
     }
 
     case 'compare_result': {
       const { winner, scores, reasoning, confidence } = action
-      return { ...state, comparison: { winner, scores, reasoning, confidence } }
+      return { ...state, verdictPending: false, comparison: { winner, scores, reasoning, confidence } }
     }
 
     case 'panel_complete': {
       return {
         ...state,
         status: 'complete',
+        verdictPending: false,
         finalAnswer: action.finalAnswer,
         confidence: action.confidence,
       }
@@ -73,7 +81,7 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
     case 'error': {
       // A stopped or failed run leaves its unfinished turn as it was, not "still typing".
       const turns = state.turns.map((t) => (t.streaming ? { ...t, streaming: false } : t))
-      return { ...state, status: 'error', errorMessage: action.message, turns }
+      return { ...state, status: 'error', verdictPending: false, errorMessage: action.message, turns }
     }
 
     default:
@@ -87,6 +95,7 @@ export function initialPanelState(): PanelState {
     turns: [],
     syntheses: [],
     comparison: null,
+    verdictPending: false,
     finalAnswer: null,
     confidence: null,
     errorMessage: null,

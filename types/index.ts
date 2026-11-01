@@ -63,10 +63,17 @@ export interface CompareJudgement {
   confidence: ConfidenceLevel
 }
 
-// Progress of a compare-mode panel (one round).
+// Progress of a compare-mode panel: proposals → critique → (Pro) revisions → judgement.
 export interface PanelCompare {
+  // Options the user named (2–3): proposer i argues for options[i]. Absent/null: the
+  // proposers take them from the question or choose their own (PROPOSER_COUNT).
+  options?: string[] | null
+  // Pro (BL-051): each proposer revises its option after the critique, before the judge.
+  revise?: boolean
   proposals: { content: string }[]
   critic: { content: string } | null
+  // Revised proposals (shown as round 2), in proposal order. Only when `revise`.
+  revisions?: { content: string }[]
   judgement: CompareJudgement | null
 }
 
@@ -236,6 +243,8 @@ export interface PanelState {
   turns: AgentTurnState[]
   syntheses: SynthesisState[]
   comparison: CompareJudgement | null
+  // A verdict is being produced (synthesis_start seen, result not yet in).
+  verdictPending: boolean
   finalAnswer: string | null
   confidence: ConfidenceLevel | null
   errorMessage: string | null

@@ -1,8 +1,8 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import { DEFAULT_MODEL } from '@/lib/anthropic'
 import { leasedUpdate, LeaseLostError, requestToolCall, streamAgent } from './orchestrator'
-import { buildCompareCriticPrompt, buildJudgePrompt, buildProposerPrompt, JUDGE_TOOL } from './comparePrompts'
-import { compareResumePoint, emptyCompare, parseJudgement, PROPOSER_COUNT } from './compareState'
+import { buildCompareCriticPrompt, buildJudgePrompt, buildProposerPrompt, buildRevisionPrompt, JUDGE_TOOL } from './comparePrompts'
+import { compareResumePoint, emptyCompare, finalProposals, isRevised, parseJudgement, proposerCount } from './compareState'
 import type { AgentPrompt } from './prompts'
 import type { OrchestratorInput, SSEGenerator } from './types'
 import type { SSEEvent } from '@/types'
@@ -15,9 +15,10 @@ async function* streamTurn(
   prompt: AgentPrompt,
   model: string,
   signal: AbortSignal | undefined,
+  round = 1,
 ): AsyncGenerator<SSEEvent, string> {
   const at = index !== undefined ? { index } : {}
-  yield { type: 'agent_start', agent, round: 1, ...at }
+  yield { type: 'agent_start', agent, round, ...at }
   let full = ''
   for await (const chunk of streamAgent(agent, prompt, model, signal)) {
     if (chunk.token) yield { type: 'agent_token', agent, ...at, token: chunk.token }
@@ -26,23 +27,26 @@ async function* streamTurn(
   return full
 }
 
-// Compare-options run (spec §7.3): Proposers → Critic → Judge, one round, resumable after
-// the last stored step. Writes go through the same lease check as critique runs; the
+// Compare-options run (spec §7.3): Proposers → Critic → (Pro) revisions → Judge, resumable
+// after the last stored step. Proposers argue for the user's options when given (BL-051).
+// Revisions are proposer turns in round 2, so viewers see them as a second round. Writes go through the same lease check as critique runs; the
 // critique loop (orchestrator.ts runPanel) is untouched.
 export async function* runCompare(input: OrchestratorInput): SSEGenerator {
   const { panelId, question, persona = 'general', context, customPersona, leaseId, signal } = input
   const model = DEFAULT_MODEL
   const stored = input.compare ?? emptyCompare()
   const proposals = stored.proposals.map((p) => p.content)
+  const revisions = (stored.revisions ?? []).map((p) => p.content)
   let critique = stored.critic?.content ?? null
+  const count = proposerCount(stored)
   const start = compareResumePoint(stored)
 
   try {
     await leasedUpdate(panelId, leaseId, () => ({ status: 'running', 'config.model': model }))
 
     // ── Proposers ────────────────────────────────────────────────────
-    for (let i = start.step === 'proposer' ? start.index : PROPOSER_COUNT; i < PROPOSER_COUNT; i++) {
-      const prompt = buildProposerPrompt(question, i, proposals, persona, context, customPersona)
+    for (let i = start.step === 'proposer' ? start.index : count; i < count; i++) {
+      const prompt = buildProposerPrompt(question, i, proposals, persona, context, customPersona, stored.options)
       const full = yield* streamTurn('proposer', i, prompt, model, signal)
       proposals.push(full)
       await leasedUpdate(panelId, leaseId, (d) => ({
@@ -60,11 +64,27 @@ export async function* runCompare(input: OrchestratorInput): SSEGenerator {
       yield { type: 'agent_complete', agent: 'critic', round: 1, content: full } satisfies SSEEvent
     }
 
+    // ── Revisions (Pro) ──────────────────────────────────────────────
+    if (stored.revise) {
+      for (let i = start.step === 'revision' ? start.index : revisions.length; i < count; i++) {
+        const prompt = buildRevisionPrompt(question, i, proposals, critique, persona, context, customPersona)
+        const full = yield* streamTurn('proposer', i, prompt, model, signal, 2)
+        revisions.push(full)
+        await leasedUpdate(panelId, leaseId, (d) => ({
+          'compare.revisions': [...(d.compare?.revisions ?? []).slice(0, i), { content: full }],
+        }))
+        yield { type: 'agent_complete', agent: 'proposer', round: 2, index: i, content: full } satisfies SSEEvent
+      }
+    }
+
     // ── Judge (tool_use, like the Synthesizer) ───────────────────────
-    yield { type: 'synthesis_start', round: 1 } satisfies SSEEvent
-    const prompt = buildJudgePrompt(question, proposals, critique, context)
+    const now = { ...stored, proposals: proposals.map((content) => ({ content })), revisions: revisions.map((content) => ({ content })), critic: { content: critique } }
+    const revised = isRevised(now)
+    const judged = finalProposals(now)
+    yield { type: 'synthesis_start', round: revised ? 2 : 1 } satisfies SSEEvent
+    const prompt = buildJudgePrompt(question, judged, critique, context, revised)
     const { input: toolInput, stopReason } = await requestToolCall(prompt, model, JUDGE_TOOL, signal)
-    const verdict = parseJudgement(toolInput, proposals.length)
+    const verdict = parseJudgement(toolInput, judged.length)
     if (!verdict) {
       throw new Error(stopReason === 'max_tokens'
         ? "The judge's verdict was cut off"

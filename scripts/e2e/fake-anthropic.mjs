@@ -14,7 +14,7 @@ import http from 'node:http'
 const PORT = Number(process.env.FAKE_ANTHROPIC_PORT ?? 8099)
 const DEFAULTS = { tokenDelayMs: 40, synthDelayMs: 0, failRole: null, decision: 'consensus', textFirst: false, starveRole: null }
 const ctl = { ...DEFAULTS }
-const calls = { respondent: 0, critic: 0, synthesizer: 0, title: 0, reply: 0, summary: 0, proposer: 0, judge: 0, convene: 0 }
+const calls = { respondent: 0, critic: 0, synthesizer: 0, title: 0, reply: 0, summary: 0, proposer: 0, reviser: 0, judge: 0, convene: 0 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 const FINAL_ANSWER = '## Verdict\n\nRaise a **small** round.\n\n1. Cut burn first\n2. Then raise'
@@ -27,6 +27,7 @@ const roleOf = (body) => {
   const system = (body.system ?? []).map((s) => s.text ?? '').join(' ')
   if (/Critic in a/.test(system)) return 'critic'
   if (/Respondent in a/.test(system)) return 'respondent'
+  if (/in the revision round/.test(system)) return 'reviser'
   if (/Proposer in a/.test(system)) return 'proposer'
   if (/running summary/.test(system)) return 'summary'
   if (/AskPanel's assistant/.test(system)) return 'reply'
@@ -159,7 +160,15 @@ const server = http.createServer(async (req, res) => {
   if (at === null) return
   ev('content_block_start', { index: at, content_block: { type: 'text', text: '' } })
   // Markdown split into small tokens, so rendering of partial markdown is exercised.
-  const heading = role === 'proposer' ? `### Plan ${'ABCDEFGH'[(calls.proposer - 1) % 8]}\n\n` : ''
+  // Proposers head their option with the user's name for it if given, else "Plan A/B/…";
+  // revisions keep the heading of the option they revise (as the real prompt asks).
+  const userText = typeof lastUser?.content === 'string' ? lastUser.content : ''
+  const assigned = /Argue for option \d+: "([^"]+)"/.exec(userText)?.[1]
+  const revising = Number(/You proposed OPTION (\d+)/.exec(userText)?.[1])
+  const original = revising ? new RegExp(`\\[OPTION ${revising}\\]\\n(#+ [^\\n]+)`).exec(userText)?.[1] : null
+  const heading = role === 'proposer'
+    ? `### ${assigned ?? `Plan ${'ABCDEFGH'[(calls.proposer - 1) % 8]}`}\n\n`
+    : role === 'reviser' ? `${original ?? `### Option ${revising}`}\n\n(Revised after the critique.)\n\n` : ''
   const md = `${heading}## ${role} view\n\nHere is the **key point** for this ${role} turn.\n\n- First consideration with detail\n- Second consideration\n- Third one\n\n| Option | Cost |\n|---|---|\n| A | Low |\n| B | High |\n\nClosing sentence from the ${role}.`
   for (const token of md.match(/.{1,6}/gs)) {
     ev('content_block_delta', { index: at, delta: { type: 'text_delta', text: token } })

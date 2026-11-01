@@ -17,7 +17,7 @@ conversation list.
 
 | Tool | Arguments | Returns |
 |---|---|---|
-| `start_debate` | `question` (10–4000 chars, self-contained), `mode` (`critique` \| `compare`), `persona`, `rounds` (1–3), `context` (≤4000 chars) | Immediately: `debate_id`, `status: "queued"`, `url` of the conversation |
+| `start_debate` | `question` (10–4000 chars, self-contained), `mode` (`critique` \| `compare`), `persona`, `rounds` (1–3), `context` (≤4000 chars), `options` (compare mode: 2–3 options to compare; omit to let the panel take them from the question) | Immediately: `debate_id`, `status: "queued"`, `url` of the conversation |
 | `get_debate_result` | `debate_id`, `wait_seconds` (0–25, default 20) | `status` (`queued` \| `running` \| `complete` \| `error`); when complete: `final_answer`, `confidence`, `transcript_url`, and for compare mode `winner` + `scores` |
 
 Debates take one to three minutes: call `get_debate_result` again while the status is

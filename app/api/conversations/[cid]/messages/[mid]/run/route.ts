@@ -49,6 +49,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       persona: settings.persona,
       maxRounds: settings.maxRounds,
       mode: proposal.routing.mode,
+      options: body.options,
       // The message the assistant proposed debating is the last user message before it.
       userContext: debateBrief(
         [...history].reverse().find((m) => m.role === 'user')?.context, before, conversation.summary ?? null, MAX_CONTEXT_CHARS,

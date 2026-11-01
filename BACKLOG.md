@@ -12,7 +12,6 @@
 | BL-031 | P1 | Post-deploy smoke test: Sonnet 5.5 + background runs | 2026-10-05 | | Never run against real Firebase Auth or the live Anthropic API. After BL-002: one panel per persona (tone, valid Synthesizer `tool_use`, title); start a debate and close the tab mid-run, reopen after a minute (should have progressed/finished); open the same panel in two tabs (one run only); /chat: quick reply, Debate, Debate this. All of this already passes against emulators + a fake model API — this is the real-services check |
 | BL-003 | P1 | Set up Stripe webhook endpoint in production | 2026-05-24 | | After live URL known: add the endpoint `/api/stripe/webhook` in Stripe with events `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`; set `stripe-webhook-secret` in Secret Manager. Test with `stripe trigger` (renewal, failed payment, cancel at period end) |
 | BL-050 | P1 | Legal details for /privacy and /terms | 2026-11-01 | | Still needed in `lib/legal.ts`: operator's legal name, a dedicated contact address, governing law (the pages say "Draft" until then). Policy calls decided 2026-11-01: keep no refunds except where the law requires, 16+, notice before price changes. Have the pages reviewed before launch |
-| BL-051 | P3 | Compare mode follow-ups | 2026-11-01 | | Spec §7.3 items not in the first version: a Pro second round where proposers revise after the critique; let users type their own options (today proposers take options named in the question, else invent them) |
 | BL-052 | P3 | MCP: OAuth sign-in for AI tools | 2026-11-01 | | **Decided 2026-11-01: after launch.** Today MCP clients use a personal API token from /account (docs/mcp.md). OAuth (Client ID Metadata Documents per the 2026-07-28 spec) would let users connect Claude/Cursor without copying a token, and enables directory listings |
 
 ---
@@ -21,8 +20,8 @@
 
 | ID | Title | Completed |
 |----|-------|-----------|
+| BL-051 | Compare follow-ups: type your own 2–3 options (chat, dashboard, MCP `options`); Pro compare debates add a revision round after the critique (shown as round 2; judge sees the revised options) | 2026-11-01 |
 | BL-029 | firebase-admin 13 → 14 (with @google-cloud/firestore 7 → 9); Node ≥22 pinned via `engines.node` — user approved 2026-11-01 | 2026-11-01 |
 | BL-049 | Share single debates: a Share button on chat debates and the panel page (confirm, copy link, Stop sharing); conversations stay private; privacy + terms updated | 2026-11-01 |
 | BL-035 | Pro capped at 100 debates per 30 days, counted and refunded like free runs; dashboard/account show what's left; a Pro user at the cap gets the reset date, not the paywall | 2026-11-01 |
 | BL-053 | Fixed for Claude Sonnet 5.5: the Synthesizer and compare Judge used a forced tool_choice (a 400 on Sonnet 5.5 — every real debate would have failed at the verdict) and token caps too small for default thinking; the fake model API now enforces these rules | 2026-11-01 |
-| BL-047 | Decided: replies + coordinator stay on Sonnet 5.5 (medium effort); titles and summaries on Haiku 5.5; free tier keeps 30 replies/day | 2026-11-01 |

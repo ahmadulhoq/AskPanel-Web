@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json()
   // Debates start private; sharing is a separate, explicit step (PATCH /api/panels/[id]).
-  const { question, isPublic = false, persona, parentPanelId, userContext, maxRounds, mode } = body
+  const { question, isPublic = false, persona, parentPanelId, userContext, maxRounds, mode, options } = body
 
   if (!question || typeof question !== 'string' || question.trim().length < 10) {
     return NextResponse.json({ error: 'Question must be at least 10 characters' }, { status: 400 })
@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
       persona,
       maxRounds,
       mode,
+      options,
       userContext,
       parentPanelId,
     })

@@ -84,7 +84,7 @@ await scenario('1. happy path: run completes, viewer gets the full event sequenc
   assert.ok(completed.startsWith(tokens.map((t) => t.token).join('')), 'streamed deltas are a prefix of the final text')
   console.log('   respondent live updates:', tokens.length)
   assert.equal(count(w.events, 'agent_start', 'respondent'), 1); assert.equal(count(w.events, 'agent_start', 'critic'), 1)
-  assert.deepEqual(await fake('/__stats'), { respondent: 1, critic: 1, synthesizer: 1, title: 1, reply: 0, summary: 0, proposer: 0, judge: 0, convene: 0 })
+  assert.deepEqual(await fake('/__stats'), { respondent: 1, critic: 1, synthesizer: 1, title: 1, reply: 0, summary: 0, proposer: 0, reviser: 0, judge: 0, convene: 0 })
   assert.equal((await user('u1')).freeRunsUsed, 1, 'successful run is not refunded')
 })
 
@@ -312,7 +312,7 @@ await scenario('16. panel list pages through everything, newest first, without r
   assert.deepEqual(await listPanels('u16', 'garbage'), { panels: [], next: null })
 })
 
-await scenario('17. compare mode: three proposers, a critic and a judge; viewers see it all', async () => {
+await scenario('17. compare mode (Pro): three proposers, a critic, revisions and a judge; viewers see it all', async () => {
   await fake('/__control', { tokenDelayMs: 5 })
   await makeUser('u17', 'pro', 0)
   const id = await createPanel({ uid: 'u17', question: 'Bootstrap, raise a seed round, or take a loan?', isPublic: true, mode: 'compare', persona: 'startup' })
@@ -322,12 +322,14 @@ await scenario('17. compare mode: three proposers, a critic and a judge; viewers
   const p = await panel(id)
   assert.equal(p.status, 'complete'); assert.equal(p.mode, 'compare')
   assert.equal(p.compare.proposals.length, 3); assert.ok(p.compare.critic)
+  assert.equal(p.compare.revise, true); assert.equal(p.compare.revisions.length, 3, 'Pro: every option revised after the critique')
+  assert.match(p.compare.revisions[1].content, /^### Plan B\n\n\(Revised/, 'a revision keeps its option')
   assert.equal(p.compare.judgement.winner, 2); assert.equal(p.compare.judgement.scores.length, 3)
   assert.match(p.finalAnswer, /Plan B/); assert.equal(p.confidence, 'high'); assert.equal(p.title, 'Harness Panel Title')
   const s = await fake('/__stats')
-  assert.deepEqual([s.proposer, s.critic, s.judge, s.respondent, s.synthesizer], [3, 1, 1, 0, 0])
-  const starts = w.events.filter((e) => e.type === 'agent_start' && e.agent === 'proposer').map((e) => e.index)
-  assert.deepEqual([...new Set(starts)], [0, 1, 2])
+  assert.deepEqual([s.proposer, s.critic, s.reviser, s.judge, s.respondent, s.synthesizer], [3, 1, 3, 1, 0, 0])
+  const starts = w.events.filter((e) => e.type === 'agent_start' && e.agent === 'proposer').map((e) => `${e.round}:${e.index}`)
+  assert.deepEqual([...new Set(starts)], ['1:0', '1:1', '1:2', '2:0', '2:1', '2:2'], 'revisions stream as round 2')
   assert.equal(w.events.filter((e) => e.type === 'compare_result').length, 1)
   assert.equal(w.events.at(-1).type, 'panel_complete')
 })
@@ -480,6 +482,40 @@ await scenario('25. sharing a debate: only its owner can turn the link on or off
   assert.equal(await setPanelSharing('p25', 'u30', true), true); assert.equal((await panel('p25')).isPublic, true)
   assert.equal(await setPanelSharing('p25', 'u30', false), true); assert.equal((await panel('p25')).isPublic, false)
   assert.equal(await setPanelSharing('missing', 'u30', true), false)
+})
+
+await scenario('26. compare with your own options: one proposer per option, no revision round on free', async () => {
+  await fake('/__control', { tokenDelayMs: 2 })
+  await makeUser('u31', 'free', 0)
+  const id = await createPanel({
+    uid: 'u31', question: 'How should we fund the next year?', isPublic: false, mode: 'compare',
+    options: [' Bootstrap for a year ', 'Raise a seed round', 'bootstrap for a year', ''],
+  })
+  await until(async () => (await panel(id))?.status === 'complete', 'the debate to finish')
+  const p = await panel(id)
+  assert.deepEqual(p.compare.options, ['Bootstrap for a year', 'Raise a seed round'], 'trimmed, deduplicated, empties dropped')
+  assert.equal(p.compare.revise, false)
+  assert.deepEqual(p.compare.proposals.map((x) => x.content.split('\n')[0]), ['### Bootstrap for a year', '### Raise a seed round'])
+  assert.equal(p.compare.judgement.scores.length, 2, 'scores only for the options that exist')
+  const s = await fake('/__stats')
+  assert.deepEqual([s.proposer, s.reviser, s.critic, s.judge], [2, 0, 1, 1])
+  const single = await createPanel({ uid: 'u31', question: 'Which one?', isPublic: false, mode: 'compare', options: ['Only one'] })
+  assert.equal((await panel(single)).compare.options, null, 'one option is not a comparison: the panel chooses')
+  // Let it finish, so its model calls don't count in the next scenario.
+  await until(async () => (await panel(single))?.status === 'complete', 'the second debate to finish')
+})
+
+await scenario('27. a Pro compare run interrupted during the revisions resumes at the next revision', async () => {
+  await fake('/__control', { tokenDelayMs: 2 })
+  await makeUser('u32', 'pro', 0)
+  const proposals = ['### Plan A\n\na', '### Plan B\n\nb', '### Plan C\n\nc'].map((content) => ({ content }))
+  await makePanel('p27', 'u32', { mode: 'compare', compare: { options: null, revise: true, proposals, critic: { content: 'crit' }, revisions: [{ content: '### Plan A\n\nrevised' }], judgement: null } })
+  await runPanelJob('p27')
+  const p = await panel('p27')
+  assert.equal(p.status, 'complete'); assert.equal(p.compare.revisions.length, 3)
+  assert.equal(p.compare.revisions[0].content, '### Plan A\n\nrevised', 'stored revision untouched')
+  const s = await fake('/__stats')
+  assert.deepEqual([s.proposer, s.critic, s.reviser, s.judge], [0, 0, 2, 1])
 })
 
 for (const r of results) console.log(r.join('  '))

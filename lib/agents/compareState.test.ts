@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { compareResumePoint, compareRunCounts, optionName, parseJudgement, PROPOSER_COUNT } from './compareState.ts'
+import { compareResumePoint, compareRunCounts, emptyCompare, finalProposals, optionName, parseJudgement, PROPOSER_COUNT, sanitizeOptions } from './compareState.ts'
 
 test('compareResumePoint walks proposers, then critic, then judge', () => {
   assert.deepEqual(compareResumePoint(null), { step: 'proposer', index: 0 })
@@ -34,3 +34,31 @@ test('compareRunCounts: a compare run counts once all its options are in', () =>
   assert.equal(compareRunCounts({ proposals: Array.from({ length: PROPOSER_COUNT }, () => ({ content: 'x' })), critic: null, judgement: null }), true)
 })
 
+
+test('sanitizeOptions: 2–3 distinct, trimmed options, or none', () => {
+  assert.deepEqual(sanitizeOptions(['  Bootstrap ', 'Raise a seed', 'Take a loan']), ['Bootstrap', 'Raise a seed', 'Take a loan'])
+  assert.deepEqual(sanitizeOptions(['A', 'a', 'B', '', 7, 'C', 'D']), ['A', 'B', 'C'], 'case-insensitive duplicates, non-strings and extras dropped')
+  assert.equal(sanitizeOptions(['Only one']), null)
+  assert.equal(sanitizeOptions(['A', '   ']), null)
+  assert.equal(sanitizeOptions('A, B'), null)
+  assert.equal(sanitizeOptions(['x'.repeat(500), 'B'])![0].length, 200)
+  assert.equal(sanitizeOptions([...Array(1000).fill(''), 'A', 'B']), null, 'only the first entries are looked at')
+})
+
+test('user options set the proposer count; revisions come after the critic', () => {
+  const two = { ...emptyCompare(['A', 'B'], true) }
+  assert.deepEqual(compareResumePoint(two), { step: 'proposer', index: 0 })
+  two.proposals = [{ content: 'a' }, { content: 'b' }]
+  assert.deepEqual(compareResumePoint(two), { step: 'critic' })
+  assert.equal(compareRunCounts(two), true, 'two of two options are in')
+  two.critic = { content: 'c' }
+  assert.deepEqual(compareResumePoint(two), { step: 'revision', index: 0 })
+  two.revisions = [{ content: 'a2' }]
+  assert.deepEqual(compareResumePoint(two), { step: 'revision', index: 1 })
+  two.revisions.push({ content: 'b2' })
+  assert.deepEqual(compareResumePoint(two), { step: 'judge' })
+  assert.deepEqual(finalProposals(two), ['a2', 'b2'], 'the judge sees the revised options')
+  const noRevise = { ...emptyCompare(), proposals: [{ content: 'a' }, { content: 'b' }, { content: 'c' }], critic: { content: 'c' } }
+  assert.deepEqual(compareResumePoint(noRevise), { step: 'judge' })
+  assert.deepEqual(finalProposals(noRevise), ['a', 'b', 'c'])
+})

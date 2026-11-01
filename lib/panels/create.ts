@@ -6,7 +6,7 @@ import { PERSONA_MAP } from '@/lib/agents/personas'
 import { runPanelJob } from '@/lib/agents/runner'
 import { reserveRun } from '@/lib/billing/runs'
 import { limitInTransaction } from '@/lib/limits/rateLimit'
-import { emptyCompare } from '@/lib/agents/compareState'
+import { emptyCompare, sanitizeOptions } from '@/lib/agents/compareState'
 
 export const MAX_CONTEXT_CHARS = 4000
 
@@ -18,6 +18,8 @@ export interface CreatePanelInput {
   maxRounds?: unknown
   // 'compare' runs the compare-options panel; anything else is a critique.
   mode?: unknown
+  // Compare mode: the options the user named (sanitized; fewer than 2 → the panel chooses).
+  options?: unknown
   userContext?: unknown
   parentPanelId?: unknown
   conversationId?: string
@@ -39,6 +41,7 @@ export async function createPanel(input: CreatePanelInput): Promise<string> {
     : 'general'
 
   const mode = input.mode === 'compare' ? 'compare' : 'critique'
+  const options = mode === 'compare' ? sanitizeOptions(input.options) : null
   const userContext = typeof input.userContext === 'string' && input.userContext.trim()
     ? input.userContext.slice(0, MAX_CONTEXT_CHARS).trim()
     : null
@@ -90,7 +93,8 @@ export async function createPanel(input: CreatePanelInput): Promise<string> {
       conversationId: input.conversationId ?? null,
       messageId: input.messageId ?? null,
       mode,
-      compare: mode === 'compare' ? emptyCompare() : null,
+      // Pro compare debates get a revision round (BL-051).
+      compare: mode === 'compare' ? emptyCompare(options, tier === 'pro') : null,
       context,
       status: 'queued',
       isPublic: input.isPublic,
